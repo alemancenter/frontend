@@ -31,6 +31,9 @@ yarn-error.log*
 .env.test.local
 *.env
 *.env.*
+# Keep example templates in git
+!*.env.*.example
+!*.env.example
 
 # logs
 *.log
