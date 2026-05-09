@@ -1,0 +1,154 @@
+# ======================================
+# alemedu.com - Robots.txt
+# Educational Platform for Jordan & Arab Countries
+# ======================================
+
+
+# Allow all search engines
+User-agent: *
+
+# Allow crawling main content
+Allow: /
+Allow: /jo/
+Allow: /sa/
+Allow: /eg/
+Allow: /ps/
+Allow: /about-us
+Allow: /contact
+Allow: /contact-us
+Allow: /services
+Allow: /members
+Allow: /search
+Allow: /storage/
+Allow: /_next/static/
+
+# Allow lessons and articles
+Allow: /*/lesson/
+Allow: /*/articles/
+Allow: /*/posts/
+Allow: /*/download/
+
+# Disallow admin/dashboard areas
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /_next/
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /auth/
+
+# Disallow internal/duplicate parameters only
+Disallow: /*?*country=
+Disallow: /*?*sort=
+Disallow: /*?*filter=
+
+# Block specific files
+Disallow: /*.json$
+
+# ======================================
+# Google Bot - Specific Rules
+# ======================================
+User-agent: Googlebot
+Allow: /
+Allow: /jo/
+Allow: /sa/
+Allow: /eg/
+Allow: /ps/
+Disallow: /dashboard
+Disallow: /api/
+Allow: /_next/static/
+Allow: /storage/
+Disallow: /_next/
+Disallow: /login
+Disallow: /register
+
+# Allow Google to index images
+User-agent: Googlebot-Image
+Allow: /
+Allow: /storage/
+Disallow: /dashboard
+
+# ======================================
+# Bing Bot
+# ======================================
+User-agent: Bingbot
+Allow: /
+Allow: /_next/static/
+Allow: /storage/
+Disallow: /dashboard
+Disallow: /api/
+Disallow: /_next/
+Disallow: /login
+Disallow: /register
+
+# ======================================
+# Yandex Bot
+# ======================================
+User-agent: Yandex
+Allow: /
+Allow: /_next/static/
+Allow: /storage/
+Disallow: /dashboard
+Disallow: /api/
+Disallow: /_next/
+
+# ======================================
+# Baidu Bot
+# ======================================
+User-agent: Baiduspider
+Allow: /
+Disallow: /dashboard
+Disallow: /api/
+
+# ======================================
+# Block Bad Bots
+# ======================================
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+User-agent: SearchmetricsBot
+Disallow: /
+
+User-agent: sistrix
+Disallow: /
+
+User-agent: SEOkicks-Robot
+Disallow: /
+
+User-agent: seoscanners
+Disallow: /
+
+User-agent: Screaming Frog
+Disallow: /
+
+# ======================================
+# Sitemap Location
+# ======================================
+Sitemap: https://alemedu.com/storage/sitemaps/sitemap_index_jo.xml
+Sitemap: https://alemedu.com/storage/sitemaps/sitemap_index_sa.xml
+Sitemap: https://alemedu.com/storage/sitemaps/sitemap_index_eg.xml
+Sitemap: https://alemedu.com/storage/sitemaps/sitemap_index_ps.xml
+Sitemap: https://alemedu.com/storage/sitemaps/sitemap_articles_jo.xml
+Sitemap: https://alemedu.com/storage/sitemaps/sitemap_post_jo.xml
+Sitemap: https://alemedu.com/storage/sitemaps/sitemap_static_jo.xml
+
+
+# ======================================
+# Host Declaration
+# ======================================
+Host: https://alemedu.com
