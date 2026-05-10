@@ -180,11 +180,11 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://cdn-cookieyes.com https://www.gstatic.com https://accounts.google.com",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://cdn-cookieyes.com https://www.gstatic.com https://accounts.google.com https://*.adtrafficquality.google",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
-              `connect-src 'self' https://api.alemedu.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://pagead2.googlesyndication.com https://region1.google-analytics.com https://region1.analytics.google.com https://cdn-cookieyes.com https://log.cookieyes.com https://accounts.google.com https://ep1.adtrafficquality.google${process.env.NODE_ENV === 'development' ? ' http://localhost:* http://127.0.0.1:*' : ''}`,
+              `connect-src 'self' https://api.alemedu.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://pagead2.googlesyndication.com https://region1.google-analytics.com https://region1.analytics.google.com https://cdn-cookieyes.com https://log.cookieyes.com https://accounts.google.com https://*.adtrafficquality.google${process.env.NODE_ENV === 'development' ? ' http://localhost:* http://127.0.0.1:*' : ''}`,
               "frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://accounts.google.com",
               "object-src 'none'",
               "base-uri 'self'",
