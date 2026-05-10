@@ -136,8 +136,9 @@ export default async function RootLayout({
     (marketingFlag !== 'false' && process.env.NODE_ENV === 'production');
   const gtmId = (process.env.NEXT_PUBLIC_GTM_ID || 'GTM-T5G89XRM').toString().trim();
   const cookieYesClientId = (
+    settings.cookieyes_id ||
     process.env.NEXT_PUBLIC_COOKIEYES_CLIENT_ID ||
-    '102b0c58290dc3f901fd1537fc68af78'
+    ''
   ).toString().trim();
 
   return (

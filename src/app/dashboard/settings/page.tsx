@@ -98,6 +98,7 @@ interface SettingsData {
   google_analytics_id?: string;
   facebook_pixel_id?: string;
   canonical_url?: string;
+  cookieyes_id?: string;
 
   // Ads
   adsense_client?: string;
@@ -1085,6 +1086,21 @@ export default function SettingsPage() {
                       onChange={(e) => updateSetting('facebook_pixel_id', e.target.value)}
                       placeholder="XXXXXXXXXXXXXXX"
                     />
+                    <div className="sm:col-span-2">
+                      <Input
+                        label="CookieYes Client ID"
+                        value={settings.cookieyes_id || ''}
+                        onChange={(e) => updateSetting('cookieyes_id', e.target.value.trim())}
+                        placeholder="9488d0c36a3dca7a2c8d335acf856fce"
+                        dir="ltr"
+                        helperText='الكود المتغير من الرابط: cdn-cookieyes.com/client_data/{ID}/script.js — اتركه فارغاً لتعطيل CookieYes'
+                      />
+                      {settings.cookieyes_id && (
+                        <p className="mt-2 text-xs text-muted-foreground font-mono bg-muted/50 rounded-lg px-3 py-2 break-all" dir="ltr">
+                          {`<script id="cookieyes" type="text/javascript" src="https://cdn-cookieyes.com/client_data/${settings.cookieyes_id}/script.js"></script>`}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
