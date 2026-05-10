@@ -37,11 +37,10 @@ export function HomeCalendarSkeleton() {
 }
 
 export default function HomeCalendarWidget({ country }: { country: HomeCountry }) {
-  const [mounted, setMounted] = useState(false);
-  const [calendarDate, setCalendarDate] = useState(new Date(0));
-  const [selectedDate, setSelectedDate] = useState('1970-01-01');
+  const [calendarDate, setCalendarDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState('');
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
-  const [eventModalDate, setEventModalDate] = useState('1970-01-01');
+  const [eventModalDate, setEventModalDate] = useState('');
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
 
@@ -50,17 +49,21 @@ export default function HomeCalendarWidget({ country }: { country: HomeCountry }
     setCalendarDate(now);
     setSelectedDate(format(now, 'yyyy-MM-dd'));
     setEventModalDate(format(now, 'yyyy-MM-dd'));
-    setMounted(true);
   }, []);
 
-  const monthStart = useMemo(() => startOfMonth(calendarDate), [calendarDate]);
-  const monthEnd = useMemo(() => endOfMonth(monthStart), [monthStart]);
-  const startDate = useMemo(() => startOfWeek(monthStart, { weekStartsOn: 0 }), [monthStart]);
-  const endDate = useMemo(() => endOfWeek(monthEnd, { weekStartsOn: 0 }), [monthEnd]);
+  const monthStart = useMemo(() => calendarDate ? startOfMonth(calendarDate) : null, [calendarDate]);
+  const monthEnd = useMemo(() => monthStart ? endOfMonth(monthStart) : null, [monthStart]);
+  const startDate = useMemo(() => monthStart ? startOfWeek(monthStart, { weekStartsOn: 0 }) : null, [monthStart]);
+  const endDate = useMemo(() => monthEnd ? endOfWeek(monthEnd, { weekStartsOn: 0 }) : null, [monthEnd]);
 
-  const calendarDays = useMemo(() => eachDayOfInterval({ start: startDate, end: endDate }), [startDate, endDate]);
+  const calendarDays = useMemo(() =>
+    startDate && endDate ? eachDayOfInterval({ start: startDate, end: endDate }) : [],
+    [startDate, endDate]
+  );
 
   useEffect(() => {
+    if (!startDate || !endDate) return;
+
     let ignore = false;
 
     const fetchMonthEvents = async () => {
@@ -109,7 +112,7 @@ export default function HomeCalendarWidget({ country }: { country: HomeCountry }
     return parsed.slice(0, 4);
   }, [events]);
 
-  if (!mounted) return <HomeCalendarSkeleton />;
+  if (!calendarDate) return <HomeCalendarSkeleton />;
 
   return (
     <>

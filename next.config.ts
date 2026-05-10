@@ -184,7 +184,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
-              "connect-src 'self' https://api.alemedu.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://pagead2.googlesyndication.com https://region1.google-analytics.com https://region1.analytics.google.com https://cdn-cookieyes.com https://accounts.google.com",
+              `connect-src 'self' https://api.alemedu.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://pagead2.googlesyndication.com https://region1.google-analytics.com https://region1.analytics.google.com https://cdn-cookieyes.com https://accounts.google.com${process.env.NODE_ENV === 'development' ? ' http://localhost:* http://127.0.0.1:*' : ''}`,
               "frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://accounts.google.com",
               "object-src 'none'",
               "base-uri 'self'",

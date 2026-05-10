@@ -76,11 +76,13 @@ class ApiClient {
   }
 
   /**
-   * Public auth endpoints must not wait for session restoration.
-   * Otherwise login/register requests can hang before being sent.
+   * Public endpoints must not wait for session restoration.
+   * Auth endpoints: login/register won't hang before being sent.
+   * Public content endpoints: school-classes, grades, filter, etc. are read-only
+   * and never need a token — waiting for session is pure latency.
    */
   private shouldBypassSessionGate(endpoint: string): boolean {
-    const publicAuthEndpoints = [
+    const bypassPrefixes = [
       '/auth/login',
       '/auth/register',
       '/auth/password/forgot',
@@ -89,9 +91,17 @@ class ApiClient {
       '/auth/email/resend',
       '/auth/google/redirect',
       '/auth/google/callback',
+      // Public read-only content endpoints
+      '/school-classes',
+      '/grades',
+      '/filter',
+      '/categories',
+      '/posts',
+      '/articles',
+      '/home',
     ];
 
-    return publicAuthEndpoints.some((path) => endpoint === path || endpoint.startsWith(`${path}/`));
+    return bypassPrefixes.some((path) => endpoint === path || endpoint.startsWith(`${path}/`) || endpoint.startsWith(`${path}?`));
   }
 
   /**

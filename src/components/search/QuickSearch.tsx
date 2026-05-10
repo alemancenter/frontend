@@ -48,8 +48,8 @@ export default function QuickSearch({ onSearch, className, showTitle = true }: Q
             name: item.grade_name || item.name
           })));
         }
-      } catch (error) {
-        console.error('Failed to fetch classes', error);
+      } catch {
+        // Network failure — UI shows empty dropdown gracefully
       } finally {
         setIsLoadingClasses(false);
       }
@@ -81,8 +81,7 @@ export default function QuickSearch({ onSearch, className, showTitle = true }: Q
         } else {
             setSubjects([]);
         }
-      } catch (error) {
-        console.error('Failed to fetch subjects', error);
+      } catch {
         setSubjects([]);
       } finally {
         setIsLoadingSubjects(false);
@@ -131,8 +130,7 @@ export default function QuickSearch({ onSearch, className, showTitle = true }: Q
         } else {
             setSemesters([]);
         }
-      } catch (error) {
-        console.error('Failed to fetch semesters', error);
+      } catch {
         setSemesters([]);
       } finally {
         setIsLoadingSemesters(false);
