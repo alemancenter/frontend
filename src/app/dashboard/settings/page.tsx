@@ -22,6 +22,9 @@ import {
   Twitter,
   Linkedin,
   Share2,
+  Server,
+  Copy,
+  Zap,
 } from 'lucide-react';
 import Image from '@/components/common/AppImage';
 import Card, { CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/Card';
@@ -341,6 +344,37 @@ export default function SettingsPage() {
 
   const updateSetting = (key: string, value: string) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const extractDomain = (url: string): string => {
+    try {
+      const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+      return parsed.hostname.replace(/^www\./, '');
+    } catch {
+      return url.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    }
+  };
+
+  const applyServerMailSettings = (domain: string, emailPrefix: string) => {
+    const email = `${emailPrefix}@${domain}`;
+    updateSetting('mail_host', domain);
+    updateSetting('mail_port', '465');
+    updateSetting('mail_encryption', 'ssl');
+    updateSetting('mail_username', email);
+    updateSetting('mail_from_address', email);
+    if (!settings.mail_from_name && settings.site_name) {
+      updateSetting('mail_from_name', settings.site_name);
+    }
+  };
+
+  const [serverMailPrefix, setServerMailPrefix] = useState('noreply');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, fieldId: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(fieldId);
+      setTimeout(() => setCopiedField(null), 2000);
+    });
   };
 
   // Load settings on mount
@@ -701,6 +735,157 @@ export default function SettingsPage() {
               animate={{ opacity: 1, y: 0 }}
               className="space-y-6"
             >
+              {/* Server Mail Quick Setup */}
+              {(() => {
+                const domain = extractDomain(settings.site_url || '');
+                if (!domain) return null;
+                const serverEmail = `${serverMailPrefix}@${domain}`;
+                const mailInfo = [
+                  { proto: 'SMTP', desc: 'صادر', host: domain, port: '465', enc: 'SSL' },
+                  { proto: 'IMAP', desc: 'وارد', host: domain, port: '993', enc: 'SSL' },
+                  { proto: 'POP3', desc: 'وارد', host: domain, port: '995', enc: 'SSL' },
+                ];
+                return (
+                  <Card className="border-primary/20">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <Server className="w-5 h-5 text-primary" />
+                        <CardTitle>إعداد بريد الخادم الداخلي</CardTitle>
+                      </div>
+                      <CardDescription>
+                        إعدادات البريد المستضاف على نطاق <span className="font-mono font-semibold text-foreground">{domain}</span> — يُستخدم بدلاً من Gmail أو Outlook
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Protocol info cards */}
+                      <div className="grid sm:grid-cols-3 gap-3">
+                        {mailInfo.map((item) => (
+                          <div key={item.proto} className="p-3 rounded-xl bg-muted/50 border space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold text-primary">{item.proto}</span>
+                              <span className="text-xs text-muted-foreground">{item.desc}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-mono truncate">{item.host}</span>
+                              <button
+                                onClick={() => copyToClipboard(item.host, `host-${item.proto}`)}
+                                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                                title="نسخ"
+                              >
+                                {copiedField === `host-${item.proto}` ? (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-mono font-bold">{item.port}</span>
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">{item.enc}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Email account + apply */}
+                      <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <Zap className="w-4 h-4 text-primary" />
+                          تطبيق الإعدادات تلقائياً على نموذج SMTP
+                        </p>
+                        <div className="flex items-end gap-2">
+                          <div className="flex-1">
+                            <label className="text-xs text-muted-foreground mb-1 block">اسم الحساب (قبل @)</label>
+                            <div className="flex items-center border rounded-lg overflow-hidden bg-background">
+                              <input
+                                type="text"
+                                value={serverMailPrefix}
+                                onChange={(e) => setServerMailPrefix(e.target.value.toLowerCase().replace(/[^a-z0-9._+-]/g, ''))}
+                                className="flex-1 px-3 py-2 text-sm bg-transparent outline-none font-mono"
+                                placeholder="noreply"
+                                dir="ltr"
+                              />
+                              <span className="px-3 py-2 text-sm text-muted-foreground bg-muted/50 border-r font-mono">
+                                @{domain}
+                              </span>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => applyServerMailSettings(domain, serverMailPrefix || 'noreply')}
+                            leftIcon={<Zap className="w-4 h-4" />}
+                            size="sm"
+                          >
+                            تطبيق
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-xs text-muted-foreground">
+                          <Mail className="w-3.5 h-3.5 shrink-0" />
+                          <span>
+                            سيتم تعيين: الخادم = <span className="font-mono font-semibold text-foreground">{domain}</span>،
+                            المنفذ = <span className="font-mono font-semibold text-foreground">465</span>،
+                            التشفير = <span className="font-mono font-semibold text-foreground">SSL</span>،
+                            المستخدم = <span className="font-mono font-semibold text-foreground">{serverEmail}</span>
+                          </span>
+                        </div>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          ⚠️ ستحتاج إلى إدخال كلمة مرور البريد يدوياً من لوحة تحكم الاستضافة (cPanel / Plesk)
+                        </p>
+                      </div>
+
+                      {/* Manual setup reference */}
+                      <details className="group">
+                        <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground select-none list-none flex items-center gap-1.5">
+                          <span className="transition-transform group-open:rotate-90">▶</span>
+                          عرض إعدادات Mail Client (Thunderbird / Outlook / iOS)
+                        </summary>
+                        <div className="mt-3 rounded-xl border overflow-hidden text-xs">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="bg-muted/50 text-right">
+                                <th className="px-3 py-2 font-medium">الإعداد</th>
+                                <th className="px-3 py-2 font-medium font-mono ltr:text-left rtl:text-right">القيمة</th>
+                                <th className="px-3 py-2 w-10"></th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {[
+                                { label: 'اسم المستخدم (Username)', value: serverEmail },
+                                { label: 'خادم SMTP (صادر)', value: domain },
+                                { label: 'منفذ SMTP', value: '465' },
+                                { label: 'تشفير SMTP', value: 'SSL/TLS' },
+                                { label: 'خادم IMAP (وارد)', value: domain },
+                                { label: 'منفذ IMAP', value: '993' },
+                                { label: 'تشفير IMAP', value: 'SSL/TLS' },
+                                { label: 'خادم POP3 (وارد)', value: domain },
+                                { label: 'منفذ POP3', value: '995' },
+                                { label: 'تشفير POP3', value: 'SSL/TLS' },
+                              ].map((row) => (
+                                <tr key={row.label} className="hover:bg-muted/30">
+                                  <td className="px-3 py-2 text-muted-foreground">{row.label}</td>
+                                  <td className="px-3 py-2 font-mono font-semibold" dir="ltr">{row.value}</td>
+                                  <td className="px-3 py-2">
+                                    <button
+                                      onClick={() => copyToClipboard(row.value, `table-${row.label}`)}
+                                      className="text-muted-foreground hover:text-foreground transition-colors"
+                                    >
+                                      {copiedField === `table-${row.label}` ? (
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                                      ) : (
+                                        <Copy className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
               <Card>
                 <CardHeader>
                   <CardTitle>إعدادات SMTP</CardTitle>
