@@ -22,17 +22,14 @@ export function usePermissionGuard(permission: string): { isAuthorized: boolean 
     // 1. Super Admin / Admin Bypass
     // Check if user has an admin role (case-insensitive)
     const adminRoles = ['admin', 'super_admin', 'super-admin', 'manager', 'administrator', 'root'];
-    
+
     const hasAdminRole = user.roles?.some(r => {
       // Handle both object (Role) and string formats just in case
       const roleName = typeof r === 'string' ? r : r.name;
       return adminRoles.includes(roleName?.toLowerCase() || '');
     }) ?? false;
 
-    // Also check for ID 1 as a fallback for the main super admin
-    const isSuperAdminById = user.id === 1;
-
-    if (hasAdminRole || isSuperAdminById) {
+    if (hasAdminRole) {
       return true;
     }
 

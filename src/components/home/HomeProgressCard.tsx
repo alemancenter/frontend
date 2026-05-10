@@ -23,7 +23,7 @@ export default function HomeProgressCard({ country }: { country: HomeCountry }) 
             <ChevronLeft className="w-4 h-4 text-slate-300" />
             <span className="text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">{country.name}</span>
           </nav>
-          <div className="text-xs font-semibold text-slate-400">مستوى التقدم: 25%</div>
+          <div className="text-xs font-semibold text-slate-600">مستوى التقدم: 25%</div>
         </div>
 
         <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">

@@ -24,7 +24,7 @@ export default function HomeSearchCard() {
         <div className="mt-6 pt-4 border-t border-border flex justify-center">
           <Link
             href="/search"
-            className="group inline-flex items-center gap-2 text-sm font-bold text-primary hover:text-primary/90 transition-colors bg-primary/10 px-4 py-2 rounded-full hover:bg-primary/20"
+            className="group inline-flex items-center gap-2 text-sm font-bold text-primary hover:text-primary/80 transition-colors border border-primary/40 px-4 py-2 rounded-full hover:bg-primary/10"
           >
             <span>بحث متقدم</span>
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />

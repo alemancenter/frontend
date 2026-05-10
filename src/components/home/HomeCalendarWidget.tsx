@@ -154,7 +154,7 @@ export default function HomeCalendarWidget({ country }: { country: HomeCountry }
                     }
                   }}
                   className={`aspect-square rounded-xl flex flex-col items-center justify-center text-sm relative transition-all duration-200 ${
-                    !isCurrMonth ? 'text-slate-300 opacity-50' : 'text-slate-700 hover:bg-slate-50'
+                    !isCurrMonth ? 'text-slate-400 opacity-50' : 'text-slate-700 hover:bg-slate-50'
                   } ${isSel ? 'ring-2 ring-blue-500 ring-offset-2 z-10' : ''} ${
                     isT ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md hover:shadow-lg scale-105' : ''
                   } ${hasEv && !isT ? 'bg-blue-50 font-bold text-blue-600 border border-blue-100' : ''}`}
@@ -167,17 +167,17 @@ export default function HomeCalendarWidget({ country }: { country: HomeCountry }
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100">
-            <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
               <Clock3 className="w-4 h-4 text-blue-500" />
               أحداث قادمة
-            </h4>
+            </h3>
             {upcomingEvents.length > 0 ? (
               <div className="space-y-2">
                 {upcomingEvents.map((e) => (
                   <div key={e.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
                     <div className="w-10 h-10 rounded-lg bg-white flex flex-col items-center justify-center text-xs border border-slate-100 shadow-sm">
                       <span className="font-bold text-slate-700">{format(e.date, 'd')}</span>
-                      <span className="text-slate-400 text-[10px]">{format(e.date, 'MMM', { locale: arSA })}</span>
+                      <span className="text-slate-500 text-[10px]">{format(e.date, 'MMM', { locale: arSA })}</span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-slate-900 text-sm truncate">{e.title}</div>
@@ -217,7 +217,7 @@ export default function HomeCalendarWidget({ country }: { country: HomeCountry }
                   {e.description ? (
                     <div className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{e.description}</div>
                   ) : (
-                    <div className="text-xs text-slate-400 italic">لا يوجد تفاصيل إضافية</div>
+                    <div className="text-xs text-slate-500 italic">لا يوجد تفاصيل إضافية</div>
                   )}
                 </div>
               </div>

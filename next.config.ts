@@ -103,6 +103,11 @@ const nextConfig: NextConfig = {
     } : false,
   },
 
+  // Target modern browsers only — prevents SWC from emitting polyfills for
+  // ES2019–ES2022 built-ins (Array.at, Object.fromEntries, etc.) that are
+  // already shipped natively in every browser in the browserslist.
+  transpilePackages: [],
+
   turbopack: {
     root: currentDir,
   },
@@ -170,6 +175,16 @@ const nextConfig: NextConfig = {
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()'
+          }
+        ]
+      },
+      // Next.js hashed static assets — safe to cache forever
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
           }
         ]
       },
