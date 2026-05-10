@@ -70,7 +70,13 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
     }
   }, [id]);
 
-  if (isAuthorized === null) {
+  useEffect(() => {
+    if (isAuthorized === false) {
+      router.replace('/dashboard/settings');
+    }
+  }, [isAuthorized, router]);
+
+  if (isAuthorized === null || isAuthorized === false) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">

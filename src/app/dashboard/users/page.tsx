@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Image from '@/components/common/AppImage';
 import {
@@ -35,7 +36,6 @@ import type { User, Role, Permission } from '@/types';
 import { usersService, messagesService, rolesService, securityService } from '@/lib/api/services';
 import { COUNTRIES } from '@/lib/api/config';
 import { usePermissionGuard } from '@/hooks/usePermissionGuard';
-import AccessDenied from '@/components/common/AccessDenied';
 
 // Helper for avatars
 const getAvatarUrl = (user: User) => {
@@ -75,6 +75,7 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function UsersPage() {
+  const router = useRouter();
   const { isAuthorized } = usePermissionGuard('users.view');
   const { isAuthorized: canManageRoles } = usePermissionGuard('manage roles');
   // Data State
@@ -431,12 +432,14 @@ export default function UsersPage() {
     setActionError(null);
   };
 
-  // Permission check after all hooks
-  if (isAuthorized === false) {
-    return <AccessDenied />;
-  }
+  // Redirect unauthorized users to their own profile instead of showing AccessDenied
+  useEffect(() => {
+    if (isAuthorized === false) {
+      router.replace('/dashboard/settings');
+    }
+  }, [isAuthorized, router]);
 
-  if (isAuthorized === null) {
+  if (isAuthorized === null || isAuthorized === false) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
