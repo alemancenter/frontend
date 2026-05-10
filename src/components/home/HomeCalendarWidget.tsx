@@ -37,11 +37,21 @@ export function HomeCalendarSkeleton() {
 }
 
 export default function HomeCalendarWidget({ country }: { country: HomeCountry }) {
-  const [calendarDate, setCalendarDate] = useState(() => new Date());
-  const [selectedDate, setSelectedDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [mounted, setMounted] = useState(false);
+  const [calendarDate, setCalendarDate] = useState(new Date(0));
+  const [selectedDate, setSelectedDate] = useState('1970-01-01');
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
-  const [eventModalDate, setEventModalDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [eventModalDate, setEventModalDate] = useState('1970-01-01');
+
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+
+  useEffect(() => {
+    const now = new Date();
+    setCalendarDate(now);
+    setSelectedDate(format(now, 'yyyy-MM-dd'));
+    setEventModalDate(format(now, 'yyyy-MM-dd'));
+    setMounted(true);
+  }, []);
 
   const monthStart = useMemo(() => startOfMonth(calendarDate), [calendarDate]);
   const monthEnd = useMemo(() => endOfMonth(monthStart), [monthStart]);
@@ -98,6 +108,8 @@ export default function HomeCalendarWidget({ country }: { country: HomeCountry }
       .sort((a, b) => a.date.getTime() - b.date.getTime());
     return parsed.slice(0, 4);
   }, [events]);
+
+  if (!mounted) return <HomeCalendarSkeleton />;
 
   return (
     <>

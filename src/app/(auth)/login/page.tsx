@@ -88,7 +88,7 @@ function LoginContent() {
       if (ret && ret.startsWith('/') && !ret.startsWith('//') && !/[<>'"\\]/.test(ret) && ret !== '/login' && !ret.startsWith('/login?') && !ret.startsWith('/login/')) {
         router.push(ret);
       } else {
-        router.push('/dashboard');
+        router.push('/');
       }
     } catch (err: unknown) {
       const message =
