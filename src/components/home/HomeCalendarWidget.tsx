@@ -166,7 +166,7 @@ export default function HomeCalendarWidget({ country }: { country: HomeCountry }
                     }
                   }}
                   className={`aspect-square rounded-xl flex flex-col items-center justify-center text-sm relative transition-all duration-200 ${
-                    !isCurrMonth ? 'text-slate-400 opacity-50' : 'text-slate-700 hover:bg-slate-50'
+                    !isCurrMonth ? 'text-slate-500' : 'text-slate-700 hover:bg-slate-50'
                   } ${isSel ? 'ring-2 ring-blue-500 ring-offset-2 z-10' : ''} ${
                     isT ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md hover:shadow-lg scale-105' : ''
                   } ${hasEv && !isT ? 'bg-blue-50 font-bold text-blue-600 border border-blue-100' : ''}`}
