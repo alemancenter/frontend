@@ -175,7 +175,23 @@ const nextConfig: NextConfig = {
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()'
-          }
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://cdn-cookieyes.com https://www.gstatic.com https://accounts.google.com",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https:",
+              "font-src 'self' data:",
+              "connect-src 'self' https://api.alemedu.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://pagead2.googlesyndication.com https://region1.google-analytics.com https://region1.analytics.google.com https://cdn-cookieyes.com https://accounts.google.com",
+              "frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://accounts.google.com",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self' https://accounts.google.com",
+              "upgrade-insecure-requests",
+            ].join('; ')
+          },
         ]
       },
       // Next.js hashed static assets — safe to cache forever
