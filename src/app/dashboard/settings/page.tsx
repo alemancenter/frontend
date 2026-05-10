@@ -739,6 +739,7 @@ export default function SettingsPage() {
                       value={settings.mail_port || ''}
                       onChange={(e) => updateSetting('mail_port', e.target.value)}
                       placeholder="587"
+                      inputMode="numeric"
                     />
                     <Input
                       label="اسم المستخدم"
@@ -758,9 +759,8 @@ export default function SettingsPage() {
                       value={settings.mail_encryption || 'tls'}
                       onChange={(e) => updateSetting('mail_encryption', e.target.value)}
                       options={[
-                        { value: 'tls', label: 'TLS (587)' },
-                        { value: 'ssl', label: 'SSL (465)' },
-                        { value: 'starttls', label: 'STARTTLS (587)' },
+                        { value: 'tls', label: 'TLS / STARTTLS (587) — Gmail, Outlook' },
+                        { value: 'ssl', label: 'SSL / Implicit TLS (465)' },
                         { value: 'none', label: 'بدون تشفير (25)' },
                       ]}
                     />
