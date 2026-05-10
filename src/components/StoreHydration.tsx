@@ -28,6 +28,8 @@ export default function StoreHydration() {
         useAuthStore.getState().logout();
         try { localStorage.removeItem('auth-storage'); } catch {}
       }
+    }).finally(() => {
+      useAuthStore.getState().setHasHydrated(true);
     });
 
     // Suppress console.error for 403 forbidden errors — toast is already shown by the API client.

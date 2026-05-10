@@ -12,9 +12,8 @@ export default function DashboardLayout({
   // Check email verification and redirect if needed
   const { isVerified } = useEmailVerification(true);
 
-  // Don't render dashboard until verified
-  // The hook will handle the redirect
-  if (isVerified === false) {
+  // null = still hydrating; false = not authenticated or not verified (redirect pending)
+  if (isVerified === null || isVerified === false) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">

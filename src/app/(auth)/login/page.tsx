@@ -68,6 +68,7 @@ function LoginContent() {
         password: formData.password,
       });
       const resolvedUser = await authService.me().catch(() => res.user);
+      if (!resolvedUser) throw new Error('فشل تحميل بيانات المستخدم');
       login(resolvedUser);
 
       // Clear security violation flags on successful login
@@ -87,7 +88,7 @@ function LoginContent() {
       if (ret && ret.startsWith('/') && !ret.startsWith('//') && !/[<>'"\\]/.test(ret) && ret !== '/login' && !ret.startsWith('/login?') && !ret.startsWith('/login/')) {
         router.push(ret);
       } else {
-        router.push('/');
+        router.push('/dashboard');
       }
     } catch (err: unknown) {
       const message =

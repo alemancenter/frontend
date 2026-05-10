@@ -4,49 +4,223 @@ import type { User, LoginCredentials, RegisterData, AuthResponse } from '@/types
 
 let inFlightMe: Promise<User> | null = null;
 let cachedMe: { user: User; at: number } | null = null;
+
 const ME_CACHE_TTL_MS = 5 * 60 * 1000;
 
+type RawAuthPayload = {
+  success?: boolean;
+  status?: boolean;
+  message?: string;
+  token?: string;
+  refresh_token?: string;
+  user?: User;
+  data?: any;
+};
+
+/**
+ * Extract user object from different backend response shapes.
+ *
+ * Supported Fiber shapes:
+ * 1) {
+ *      success: true,
+ *      message: "...",
+ *      token: "...",
+ *      refresh_token: "...",
+ *      data: { id, name, email, ... }
+ *    }
+ *
+ * 2) {
+ *      success: true,
+ *      message: "...",
+ *      data: {
+ *        token: "...",
+ *        refresh_token: "...",
+ *        user: { id, name, email, ... }
+ *      }
+ *    }
+ *
+ * 3) Legacy:
+ *    { token, user }
+ */
+function extractUser(raw: RawAuthPayload): User | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  if (raw.data?.user && typeof raw.data.user === 'object') {
+    return raw.data.user as User;
+  }
+
+  if (raw.user && typeof raw.user === 'object') {
+    return raw.user as User;
+  }
+
+  if (raw.data && typeof raw.data === 'object' && 'id' in raw.data) {
+    return raw.data as User;
+  }
+
+  if ('id' in raw) {
+    return raw as unknown as User;
+  }
+
+  return null;
+}
+
+/**
+ * Extract JWT access token from different backend response shapes.
+ */
+function extractToken(raw: RawAuthPayload): string {
+  if (!raw || typeof raw !== 'object') return '';
+
+  return String(
+    raw.token ??
+      raw.data?.token ??
+      ''
+  );
+}
+
+/**
+ * Extract refresh token from different backend response shapes.
+ */
+function extractRefreshToken(raw: RawAuthPayload): string {
+  if (!raw || typeof raw !== 'object') return '';
+
+  return String(
+    raw.refresh_token ??
+      raw.data?.refresh_token ??
+      ''
+  );
+}
+
+/**
+ * Normalize the backend auth response into the frontend AuthResponse shape.
+ */
+async function normalizeAndPersistAuthResponse(responseData: unknown): Promise<AuthResponse> {
+  if (!responseData || typeof responseData !== 'object') {
+    throw new Error('استجابة تسجيل الدخول غير صالحة من الخادم');
+  }
+
+  const raw = responseData as RawAuthPayload;
+
+  const token = extractToken(raw);
+  const refreshToken = extractRefreshToken(raw);
+  const user = extractUser(raw);
+
+  if (!token) {
+    throw new Error(raw.message || 'لم يتم استلام رمز تسجيل الدخول من الخادم');
+  }
+
+  if (!user) {
+    throw new Error(raw.message || 'لم يتم استلام بيانات المستخدم من الخادم');
+  }
+
+  await apiClient.persistToken(token, refreshToken || undefined);
+
+  cachedMe = {
+    user,
+    at: Date.now(),
+  };
+
+  return {
+    status: raw.success ?? raw.status ?? true,
+    message: raw.message ?? '',
+    token,
+    user,
+  };
+}
+
+/**
+ * Normalize current-user response.
+ */
+function normalizeUserResponse(responseData: unknown): User {
+  if (!responseData || typeof responseData !== 'object') {
+    throw new Error('Invalid response format');
+  }
+
+  const raw = responseData as any;
+
+  if (raw.data && typeof raw.data === 'object' && 'id' in raw.data) {
+    return raw.data as User;
+  }
+
+  if (raw.data?.user && typeof raw.data.user === 'object') {
+    return raw.data.user as User;
+  }
+
+  if (raw.user && typeof raw.user === 'object') {
+    return raw.user as User;
+  }
+
+  if ('id' in raw) {
+    return raw as User;
+  }
+
+  throw new Error('Invalid response format');
+}
+
+/**
+ * Normalize simple message response.
+ */
+function normalizeMessageResponse(responseData: unknown): { message: string } {
+  if (!responseData || typeof responseData !== 'object') {
+    return { message: '' };
+  }
+
+  const raw = responseData as any;
+
+  if (raw.data?.message) {
+    return { message: String(raw.data.message) };
+  }
+
+  if (raw.message) {
+    return { message: String(raw.message) };
+  }
+
+  return { message: '' };
+}
 
 export const authService = {
   /**
-   * Login user with credentials
+   * Login user with credentials.
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, credentials);
-    const raw = response.data as any;
-    // Fiber envelope: { success, message, token, refresh_token, data: { user fields } }
-    const token: string = raw.token ?? raw.data?.token ?? '';
-    const refreshToken: string = raw.refresh_token ?? raw.data?.refresh_token ?? '';
-    const user: User = raw.data ?? raw.user ?? raw;
-    if (token) {
-      await apiClient.persistToken(token, refreshToken);
-    }
-    cachedMe = { user, at: Date.now() };
-    return { status: raw.success ?? true, message: raw.message ?? '', token, user };
+    const response = await apiClient.post<any>(
+      API_ENDPOINTS.AUTH.LOGIN,
+      credentials,
+      {
+        cache: 'no-store',
+      }
+    );
+
+    return normalizeAndPersistAuthResponse(response.data);
   },
 
   /**
-   * Register new user
+   * Register new user.
    */
   async register(data: RegisterData): Promise<AuthResponse> {
-    const response = await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, data);
-    const raw = response.data as any;
-    const token: string = raw.token ?? raw.data?.token ?? '';
-    const refreshToken: string = raw.refresh_token ?? raw.data?.refresh_token ?? '';
-    const user: User = raw.data ?? raw.user ?? raw;
-    if (token) {
-      await apiClient.persistToken(token, refreshToken);
-    }
-    cachedMe = { user, at: Date.now() };
-    return { status: raw.success ?? true, message: raw.message ?? '', token, user };
+    const response = await apiClient.post<any>(
+      API_ENDPOINTS.AUTH.REGISTER,
+      data,
+      {
+        cache: 'no-store',
+      }
+    );
+
+    return normalizeAndPersistAuthResponse(response.data);
   },
 
   /**
-   * Logout current user
+   * Logout current user.
    */
   async logout(): Promise<void> {
     try {
-      await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT, undefined, { suppressAuthRedirect: true });
+      await apiClient.post(
+        API_ENDPOINTS.AUTH.LOGOUT,
+        undefined,
+        {
+          suppressAuthRedirect: true,
+          cache: 'no-store',
+        }
+      );
     } finally {
       cachedMe = null;
       inFlightMe = null;
@@ -55,33 +229,47 @@ export const authService = {
   },
 
   /**
-   * Get current authenticated user
+   * Get current authenticated user.
    */
   async me(force = false): Promise<User> {
     const now = Date.now();
+
     if (!force && cachedMe && now - cachedMe.at < ME_CACHE_TTL_MS) {
       return cachedMe.user;
     }
-    if (!force && inFlightMe) return inFlightMe;
 
-    inFlightMe = apiClient.get('/auth/user', undefined, { cache: 'force-cache' })
+    if (!force && inFlightMe) {
+      return inFlightMe;
+    }
+
+    inFlightMe = apiClient
+      .get<any>(
+        '/auth/user',
+        undefined,
+        {
+          cache: 'no-store',
+          suppressAuthRedirect: true,
+        }
+      )
       .then((response) => {
-        const raw = response.data as any;
-        let user: User | null = null;
-        if (raw.data && typeof raw.data === 'object' && 'id' in raw.data) user = raw.data as User;
-        else if (raw.data?.user) user = raw.data.user as User;
-        else if (raw.user) user = raw.user as User;
-        if (!user) throw new Error('Invalid response format');
-        cachedMe = { user, at: Date.now() };
+        const user = normalizeUserResponse(response.data);
+
+        cachedMe = {
+          user,
+          at: Date.now(),
+        };
+
         return user;
       })
-      .finally(() => { inFlightMe = null; });
+      .finally(() => {
+        inFlightMe = null;
+      });
 
     return inFlightMe;
   },
 
   /**
-   * Update current user's profile (doesn't require admin permissions)
+   * Update current user's profile.
    */
   async updateProfile(data: {
     name?: string;
@@ -100,39 +288,55 @@ export const authService = {
     formData.append('_method', 'PUT');
 
     Object.entries(data).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        if (value instanceof File) {
-          formData.append(key, value);
-        } else if (key === 'social_links' && typeof value === 'object') {
-          Object.entries(value).forEach(([k, v]) => {
-            formData.append(`social_links[${k}]`, String(v || ''));
-          });
-        } else {
-          formData.append(key, String(value));
-        }
+      if (value === undefined || value === null) return;
+
+      if (value instanceof File) {
+        formData.append(key, value);
+        return;
       }
+
+      if (key === 'social_links' && typeof value === 'object') {
+        Object.entries(value).forEach(([k, v]) => {
+          formData.append(`social_links[${k}]`, String(v || ''));
+        });
+        return;
+      }
+
+      formData.append(key, String(value));
     });
 
-    const response = await apiClient.upload<{ data: User } | User>(
+    const response = await apiClient.upload<any>(
       '/auth/profile',
       formData
     );
-    return 'data' in response.data ? response.data.data : response.data;
+
+    const user = normalizeUserResponse(response.data);
+
+    cachedMe = {
+      user,
+      at: Date.now(),
+    };
+
+    return user;
   },
 
   /**
-   * Send forgot password email
+   * Send forgot password email.
    */
   async forgotPassword(email: string): Promise<{ message: string }> {
-    const response = await apiClient.post<{ message: string } | { data: { message: string } }>(
+    const response = await apiClient.post<any>(
       API_ENDPOINTS.AUTH.FORGOT_PASSWORD,
-      { email }
+      { email },
+      {
+        cache: 'no-store',
+      }
     );
-    return 'data' in response.data ? response.data.data : response.data;
+
+    return normalizeMessageResponse(response.data);
   },
 
   /**
-   * Reset password with token
+   * Reset password with token.
    */
   async resetPassword(data: {
     token: string;
@@ -140,55 +344,75 @@ export const authService = {
     password: string;
     password_confirmation: string;
   }): Promise<{ message: string }> {
-    const response = await apiClient.post<{ message: string } | { data: { message: string } }>(
+    const response = await apiClient.post<any>(
       API_ENDPOINTS.AUTH.RESET_PASSWORD,
-      data
+      data,
+      {
+        cache: 'no-store',
+      }
     );
-    return 'data' in response.data ? response.data.data : response.data;
+
+    return normalizeMessageResponse(response.data);
   },
 
   /**
-   * Verify email with link parameters
+   * Verify email with link parameters.
    */
   async verifyEmail(id: string, token: string): Promise<{ message: string }> {
-    const response = await apiClient.get<{ message: string } | { data: { message: string } }>(
-      API_ENDPOINTS.AUTH.VERIFY_EMAIL(id, token)
+    const response = await apiClient.get<any>(
+      API_ENDPOINTS.AUTH.VERIFY_EMAIL(id, token),
+      undefined,
+      {
+        cache: 'no-store',
+      }
     );
-    return 'data' in response.data ? response.data.data : response.data;
+
+    return normalizeMessageResponse(response.data);
   },
 
   /**
-   * Resend verification email
+   * Resend verification email.
    */
   async resendVerifyEmail(): Promise<{ message: string }> {
-    const response = await apiClient.post<{ message: string } | { data: { message: string } }>(
-      API_ENDPOINTS.AUTH.RESEND_VERIFY
+    const response = await apiClient.post<any>(
+      API_ENDPOINTS.AUTH.RESEND_VERIFY,
+      undefined,
+      {
+        cache: 'no-store',
+      }
     );
-    return 'data' in response.data ? response.data.data : response.data;
+
+    return normalizeMessageResponse(response.data);
   },
 
   /**
-   * Get Google OAuth redirect URL
+   * Get Google OAuth redirect endpoint.
    */
   getGoogleRedirectUrl(): string {
-    return `${API_ENDPOINTS.AUTH.GOOGLE_REDIRECT}`;
+    return API_ENDPOINTS.AUTH.GOOGLE_REDIRECT;
   },
 
   /**
-   * Handle Google OAuth callback
+   * Handle Google OAuth callback.
    */
   async handleGoogleCallback(code: string): Promise<AuthResponse> {
-    const response = await apiClient.get<AuthResponse | { data: AuthResponse }>(
+    const response = await apiClient.get<any>(
       API_ENDPOINTS.AUTH.GOOGLE_CALLBACK,
-      { code }
+      { code },
+      {
+        cache: 'no-store',
+      }
     );
-    const raw = response.data as any;
-    const payload = raw.data ?? raw;
-    const refreshToken: string = raw.refresh_token ?? raw.data?.refresh_token ?? '';
-    if (payload.token) {
-      await apiClient.persistToken(payload.token, refreshToken);
-    }
-    return payload;
+
+    return normalizeAndPersistAuthResponse(response.data);
+  },
+
+  /**
+   * Clear local auth cache only.
+   */
+  clearCache(): void {
+    cachedMe = null;
+    inFlightMe = null;
   },
 };
 

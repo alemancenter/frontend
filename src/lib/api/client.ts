@@ -5,9 +5,9 @@ import { universalFetch, shouldUseInternalFetch } from './internal-fetch';
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
   timeout?: number;
-  /** Override the number of retry attempts for this request (default: 3). Pass 0 to disable retries. */
+  /** Override the number of retry attempts for this request. Pass 0 to disable retries. */
   retries?: number;
-  /** When true, a 401 response will NOT clear the session or redirect to login. Use for background/polling requests. */
+  /** When true, a 401 response will NOT clear the session or redirect to login. */
   suppressAuthRedirect?: boolean;
 }
 
@@ -20,38 +20,43 @@ interface ApiResponse<T> {
 
 class ApiClient {
   private baseUrl: string;
+
   // Tokens are stored in memory only — never in localStorage.
-  // Persistence across page refreshes is handled by HttpOnly cookies set via /api/auth/session.
+  // Persistence across refresh is handled by HttpOnly cookies through /api/auth/session.
   private token: string | null = null;
   private refreshTokenValue: string | null = null;
+
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
   private inFlightGetRequests: Map<string, Promise<ApiResponse<any>>> = new Map();
-  private cacheTimeout = 300000; // 5 minutes cache (300000ms)
-  private requestTimeout = 15000; // 15 seconds timeout
-  private maxRetries = 3; // Maximum retry attempts
-  private retryDelay = 1000; // Base delay between retries (ms)
 
-  // Session restoration gate — all browser requests wait until restoreFromSession() resolves.
+  private cacheTimeout = 300000; // 5 minutes
+  private requestTimeout = 15000; // 15 seconds
+  private maxRetries = 3;
+  private retryDelay = 1000;
+
+  // Session restoration gate — protected browser requests wait until restoreFromSession() resolves.
   private sessionRestored = false;
   private sessionReadyResolve!: () => void;
   private sessionReadyPromise: Promise<void>;
 
   constructor() {
     this.baseUrl = API_CONFIG.BASE_URL;
+
     if (!/^https?:\/\//i.test(this.baseUrl)) {
-      this.baseUrl = 'http://localhost:8000/api';
+      this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.alemedu.com/api';
     }
-    // Create the gate promise. On SSR it resolves immediately.
+
     this.sessionReadyPromise = new Promise<void>((resolve) => {
       this.sessionReadyResolve = resolve;
     });
+
     if (typeof window === 'undefined') {
       this.sessionRestored = true;
       this.sessionReadyResolve();
     }
   }
 
-  private markSessionReady() {
+  private markSessionReady(): void {
     if (!this.sessionRestored) {
       this.sessionRestored = true;
       this.sessionReadyResolve();
@@ -59,21 +64,82 @@ class ApiClient {
   }
 
   /**
-   * Get the appropriate base URL based on current execution context
-   * - Server-side (SSR): Uses internal URL (localhost) for faster connection
-   * - Client-side (Browser): Uses public URL
+   * Server-side SSR uses internal API.
+   * Browser uses public API.
    */
   private getCurrentBaseUrl(): string {
     if (typeof window === 'undefined') {
-      // Server-side: use internal URL for faster localhost connection
       return API_CONFIG.INTERNAL_URL;
     }
-    // Client-side: use public URL
-    return this.baseUrl;
+
+    return API_CONFIG.BASE_URL;
   }
 
-  // Fetch with timeout
-  // Uses universalFetch for localhost HTTPS with SSL bypass (SSR internal requests)
+  /**
+   * Public auth endpoints must not wait for session restoration.
+   * Otherwise login/register requests can hang before being sent.
+   */
+  private shouldBypassSessionGate(endpoint: string): boolean {
+    const publicAuthEndpoints = [
+      '/auth/login',
+      '/auth/register',
+      '/auth/password/forgot',
+      '/auth/password/reset',
+      '/auth/email/verify',
+      '/auth/email/resend',
+      '/auth/google/redirect',
+      '/auth/google/callback',
+    ];
+
+    return publicAuthEndpoints.some((path) => endpoint === path || endpoint.startsWith(`${path}/`));
+  }
+
+  /**
+   * Parse API response safely.
+   * If backend returns HTML or empty body where JSON is expected, throw a clear error.
+   */
+  private async parseResponseBody(response: Response, url: string): Promise<any> {
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text().catch(() => '');
+
+    if (!text) {
+      return null;
+    }
+
+    if (contentType.includes('application/json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw Object.assign(
+          new Error(`استجابة JSON غير صالحة من الخادم: ${url}`),
+          {
+            status: response.status,
+            contentType,
+            responsePreview: text.slice(0, 500),
+          }
+        );
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      console.error('[API] Non-JSON response', {
+        url,
+        status: response.status,
+        contentType,
+        preview: text.slice(0, 500),
+      });
+    }
+
+    throw Object.assign(
+      new Error(`الخادم أعاد استجابة غير JSON من المسار: ${url}`),
+      {
+        status: response.status,
+        contentType,
+        responsePreview: text.slice(0, 500),
+      }
+    );
+  }
+
   private async fetchWithTimeout(
     url: string,
     options: RequestInit,
@@ -83,31 +149,26 @@ class ApiClient {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      // Check if we should use internal fetch (localhost with SSL bypass)
       const useInternalFetch = shouldUseInternalFetch(url);
 
       if (useInternalFetch) {
-        // For internal fetch, handle timeout differently (it has its own timeout)
         clearTimeout(timeoutId);
-        const response = await universalFetch(url, {
+
+        return await universalFetch(url, {
           ...options,
           timeout,
         } as RequestInit & { timeout?: number });
-        return response;
       }
 
-      // Standard fetch for external URLs
-      const response = await fetch(url, {
+      return await fetch(url, {
         ...options,
         signal: controller.signal,
       });
-      return response;
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
-  // Retry logic with exponential backoff
   private async fetchWithRetry(
     url: string,
     options: RequestInit,
@@ -118,38 +179,36 @@ class ApiClient {
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const response = await this.fetchWithTimeout(url, options, timeout);
-        return response;
+        return await this.fetchWithTimeout(url, options, timeout);
       } catch (error: any) {
         lastError = error;
 
-        // Don't retry on abort (user cancelled) or non-network errors
         if (error.name === 'AbortError') {
-          // Timeout - worth retrying
           console.warn(`Request timeout (attempt ${attempt + 1}/${retries + 1}): ${url}`);
-        } else if (error.message?.includes('fetch failed') || error.message?.includes('ECONNRESET')) {
-          // Network error - worth retrying
+        } else if (
+          error.message?.includes('fetch failed') ||
+          error.message?.includes('ECONNRESET') ||
+          error.message?.includes('ECONNREFUSED') ||
+          error.message?.includes('ETIMEDOUT')
+        ) {
           console.warn(`Network error (attempt ${attempt + 1}/${retries + 1}): ${url}`);
         } else {
-          // Other errors - don't retry
           throw error;
         }
 
-        // Don't wait after the last attempt
         if (attempt < retries) {
-          // Exponential backoff with jitter
           const delay = this.retryDelay * Math.pow(2, attempt) + Math.random() * 500;
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
 
-    // All retries failed
     throw lastError || new Error('Request failed after retries');
   }
 
-  private setLocalToken(token: string | null, refreshToken?: string | null) {
+  private setLocalToken(token: string | null, refreshToken?: string | null): void {
     this.token = token;
+
     if (token === null) {
       this.refreshTokenValue = null;
     } else if (refreshToken !== undefined) {
@@ -157,12 +216,12 @@ class ApiClient {
     }
   }
 
-  setToken(token: string | null) {
+  setToken(token: string | null): void {
     this.setLocalToken(token);
     void this.syncAuthCookie(token, null);
   }
 
-  async persistToken(token: string | null, refreshToken?: string): Promise<void> {
+  async persistToken(token: string | null, refreshToken?: string | null): Promise<void> {
     this.setLocalToken(token, refreshToken ?? null);
     await this.syncAuthCookie(token, refreshToken ?? null);
   }
@@ -175,7 +234,10 @@ class ApiClient {
         method: token ? 'POST' : 'DELETE',
         headers: token ? { 'Content-Type': 'application/json' } : undefined,
         body: token
-          ? JSON.stringify({ token, ...(refreshToken ? { refresh_token: refreshToken } : {}) })
+          ? JSON.stringify({
+              token,
+              ...(refreshToken ? { refresh_token: refreshToken } : {}),
+            })
           : undefined,
         credentials: 'include',
         cache: 'no-store',
@@ -190,25 +252,31 @@ class ApiClient {
   }
 
   /**
-   * Restore the in-memory token from the HttpOnly cookie by calling the server-side session route.
-   * Must be called once on app startup (page refresh) so the client can make authenticated requests.
-   * Returns true if a valid session was found, false if the user is not authenticated.
+   * Restore in-memory token from HttpOnly cookie.
    */
   async restoreFromSession(): Promise<boolean> {
     if (typeof window === 'undefined') return false;
+
     try {
       const res = await fetch('/api/auth/session', {
         method: 'GET',
         credentials: 'include',
         cache: 'no-store',
       });
-      if (!res.ok) { this.markSessionReady(); return false; }
+
+      if (!res.ok) {
+        this.markSessionReady();
+        return false;
+      }
+
       const data = await res.json();
+
       if (data.authenticated && typeof data.token === 'string') {
         this.setLocalToken(data.token, data.refresh_token ?? null);
         this.markSessionReady();
         return true;
       }
+
       this.markSessionReady();
       return false;
     } catch {
@@ -217,13 +285,14 @@ class ApiClient {
     }
   }
 
-  private buildUrl(endpoint: string, params?: Record<string, string | number | boolean | undefined>): string {
-    // Handle dynamic endpoints that already contain parameters in the path
+  private buildUrl(
+    endpoint: string,
+    params?: Record<string, string | number | boolean | undefined>
+  ): string {
     let finalEndpoint = endpoint;
-    const baseUrl = this.getCurrentBaseUrl();
+    const baseUrl = this.getCurrentBaseUrl().replace(/\/+$/, '');
 
     if (params) {
-      // Replace path parameters first (e.g., :id, {id})
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && finalEndpoint.includes(`:${key}`)) {
           finalEndpoint = finalEndpoint.replace(`:${key}`, String(value));
@@ -232,13 +301,18 @@ class ApiClient {
         }
       });
 
-      // Then add remaining params as query parameters
       const url = new URL(`${baseUrl}${finalEndpoint}`);
+
       Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && !finalEndpoint.includes(`:${key}`) && !finalEndpoint.includes(`{${key}}`)) {
+        if (
+          value !== undefined &&
+          !finalEndpoint.includes(`:${key}`) &&
+          !finalEndpoint.includes(`{${key}}`)
+        ) {
           url.searchParams.append(key, String(value));
         }
       });
+
       return url.toString();
     }
 
@@ -247,62 +321,67 @@ class ApiClient {
 
   private sanitizeReturnPath(path: string): string | null {
     if (!path) return null;
-    // Decode first to prevent bypass via percent-encoding (e.g. /%2F%2Fevil.com)
+
     let decoded: string;
+
     try {
       decoded = decodeURIComponent(path);
     } catch {
       return null;
     }
-    // Must start with / but NOT // (to prevent protocol-relative URLs like //evil.com)
+
     if (!decoded.startsWith('/') || decoded.startsWith('//')) return null;
-    // Reject suspicious characters
     if (/[<>'"\\]/.test(decoded)) return null;
 
     const blocked = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
+
     for (const p of blocked) {
       if (decoded === p || decoded.startsWith(`${p}?`) || decoded.startsWith(`${p}/`)) {
         return null;
       }
     }
 
-    if (decoded.length > 800) return decoded.slice(0, 800);
-    return decoded;
+    return decoded.length > 800 ? decoded.slice(0, 800) : decoded;
   }
 
   /**
-   * Automatically refresh the JWT token
+   * Refresh JWT token.
    */
   private async refreshToken(): Promise<boolean> {
     try {
       const rt = this.refreshTokenValue;
-      const frontendApiKey = process.env.NEXT_PUBLIC_FRONTEND_API_KEY || '';
 
-      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+      const frontendApiKey =
+        typeof window === 'undefined'
+          ? process.env.FRONTEND_API_KEY || ''
+          : process.env.NEXT_PUBLIC_FRONTEND_API_KEY || '';
+
+      const response = await fetch(`${this.getCurrentBaseUrl().replace(/\/+$/, '')}/auth/refresh`, {
         method: 'POST',
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
           'X-Country-Id': process.env.NEXT_PUBLIC_DEFAULT_COUNTRY_ID || '1',
           ...(frontendApiKey ? { 'X-Frontend-Key': frontendApiKey } : {}),
+          ...(typeof window === 'undefined' ? { Host: getApiHostname() } : {}),
         },
-        // If in-memory refresh token exists send it in the body.
-        // Otherwise the backend will read it from the HttpOnly refresh_token cookie
-        // (sent automatically because credentials:'include').
         body: rt ? JSON.stringify({ refresh_token: rt }) : JSON.stringify({}),
-        credentials: 'include',
+        credentials: typeof window === 'undefined' ? 'omit' : 'include',
+        cache: 'no-store',
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = await this.parseResponseBody(response, `${this.getCurrentBaseUrl()}/auth/refresh`);
         const newToken = data?.token ?? data?.data?.token;
         const newRefresh = data?.refresh_token ?? data?.data?.refresh_token;
+
         if (newToken) {
           await this.persistToken(newToken, newRefresh ?? rt ?? undefined);
           return true;
         }
       }
+
       return false;
     } catch (err) {
       console.error('Failed to refresh token:', err);
@@ -310,13 +389,11 @@ class ApiClient {
     }
   }
 
-  private handleUnauthorizedRedirect() {
+  private handleUnauthorizedRedirect(): void {
     this.setToken(null);
-    // syncAuthCookie is called inside setToken — clears both HttpOnly cookies
 
     if (typeof window === 'undefined') return;
 
-    // Clear Zustand auth store to prevent stale isAuthenticated state in the UI
     try {
       localStorage.removeItem('auth-storage');
     } catch {}
@@ -332,17 +409,17 @@ class ApiClient {
     endpoint: string,
     options: RequestOptions = {}
   ): Promise<ApiResponse<T>> {
-    // Wait for session restoration before making any request on the browser.
-    // This prevents 401s when the dashboard mounts before restoreFromSession() finishes.
-    if (typeof window !== 'undefined' && !this.sessionRestored) {
+    const bypassSessionGate = this.shouldBypassSessionGate(endpoint);
+
+    if (typeof window !== 'undefined' && !this.sessionRestored && !bypassSessionGate) {
       await this.sessionReadyPromise;
     }
 
     const { params, timeout, retries, suppressAuthRedirect, ...fetchOptions } = options;
     const url = this.buildUrl(endpoint, params);
     const isGetRequest = !fetchOptions.method || fetchOptions.method === 'GET';
+    const isServerSide = typeof window === 'undefined';
 
-    // Build headers - don't send Content-Type for GET requests (no body)
     const headers: HeadersInit = {
       Accept: 'application/json',
       'X-App-Locale': 'ar',
@@ -350,70 +427,73 @@ class ApiClient {
       ...(options.headers || {}),
     };
 
-    // Only add Content-Type for requests with body (POST, PUT, PATCH)
     if (!isGetRequest) {
       (headers as Record<string, string>)['Content-Type'] = 'application/json';
     }
 
-    // Add Frontend API Key — prefer server-only var on SSR to avoid leaking the public key in SSR logs
-    const frontendApiKey = typeof window === 'undefined'
+    const frontendApiKey = isServerSide
       ? process.env.FRONTEND_API_KEY
       : process.env.NEXT_PUBLIC_FRONTEND_API_KEY;
+
     if (frontendApiKey) {
       (headers as Record<string, string>)['X-Frontend-Key'] = frontendApiKey;
     }
 
-    // Add Country Header
-    // Priority: explicit params.country_id > params.country > params.database > localStorage / SSR default
-    const countryMap: Record<string, string> = { 'jo': '1', 'sa': '2', 'eg': '3', 'ps': '4' };
+    const countryMap: Record<string, string> = {
+      jo: '1',
+      sa: '2',
+      eg: '3',
+      ps: '4',
+    };
+
     const defaultCountryId = process.env.NEXT_PUBLIC_DEFAULT_COUNTRY_ID || '1';
+
     if (defaultCountryId) {
       (headers as Record<string, string>)['X-Country-Id'] = defaultCountryId;
     }
 
     if (params?.country_id) {
-      // Explicit override — works on both browser and SSR (e.g. dashboard form country picker)
       (headers as Record<string, string>)['X-Country-Id'] = String(params.country_id);
     } else if (params?.country) {
-      // params.country may be a code ('jo') or a numeric ID ('1') — normalise to ID
       const cv = String(params.country);
       const mappedId = countryMap[cv];
       (headers as Record<string, string>)['X-Country-Id'] = mappedId ?? cv;
       if (mappedId) (headers as Record<string, string>)['X-Country-Code'] = cv;
     } else if (params?.database) {
-      (headers as Record<string, string>)['X-Country-Code'] = String(params.database);
-      const countryId = countryMap[String(params.database)];
+      const dbCode = String(params.database);
+      (headers as Record<string, string>)['X-Country-Code'] = dbCode;
+      const countryId = countryMap[dbCode];
+
       if (countryId) {
         (headers as Record<string, string>)['X-Country-Id'] = countryId;
       }
     } else if (typeof window !== 'undefined') {
-      // Browser fallback: read from localStorage
       try {
         const countryStorage = localStorage.getItem('country-storage');
+
         if (countryStorage) {
           const parsed: unknown = JSON.parse(countryStorage);
-          const state = parsed && typeof parsed === 'object' && 'state' in parsed
-            ? (parsed as { state?: { country?: { id?: string; code?: string } } }).state
-            : undefined;
+          const state =
+            parsed && typeof parsed === 'object' && 'state' in parsed
+              ? (parsed as { state?: { country?: { id?: string; code?: string } } }).state
+              : undefined;
+
           if (state?.country?.id) {
             (headers as Record<string, string>)['X-Country-Id'] = state.country.id;
             (headers as Record<string, string>)['X-Country-Code'] = state.country.code ?? '';
           }
         }
       } catch {
-        // ignore
+        // ignore invalid localStorage data
       }
     }
 
     const token = this.getToken();
+
     if (token) {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
 
-    // Use Next.js cache for server-side GET requests without auth
-    const isServerSide = typeof window === 'undefined';
-
-    // Add Host header for SSR internal requests (Nginx routing)
     if (isServerSide) {
       (headers as Record<string, string>)['Host'] = getApiHostname();
     }
@@ -421,45 +501,54 @@ class ApiClient {
     const fetchConfig: RequestInit & { next?: { revalidate?: number | false } } = {
       ...fetchOptions,
       headers,
-      // Include credentials for CORS requests (cookies, auth headers)
       credentials: isServerSide ? 'omit' : 'include',
     };
 
-    // Enable Next.js caching for public GET requests on server
     if (isServerSide && isGetRequest && !token) {
-      // Only add default revalidate if no cache control is specified
       if (fetchConfig.cache !== 'no-store' && fetchConfig.cache !== 'no-cache' && !fetchConfig.next) {
-        fetchConfig.next = { revalidate: 60 }; // Cache for 60 seconds
+        fetchConfig.next = { revalidate: 60 };
       }
     }
 
     try {
-      // Use retry mechanism for better reliability
-      const response = await this.fetchWithRetry(url, fetchConfig, retries ?? this.maxRetries, timeout);
+      const response = await this.fetchWithRetry(
+        url,
+        fetchConfig,
+        retries ?? this.maxRetries,
+        timeout
+      );
 
-      let data: any;
-      try {
-        data = await response.json();
-      } catch {
-        data = null;
-      }
+      const data = await this.parseResponseBody(response, url);
 
       if (!response.ok) {
         if (response.status === 401 && !suppressAuthRedirect) {
-          // Try to refresh token
           const refreshed = await this.refreshToken();
+
           if (refreshed) {
-            // Re-attempt original request with new token
             (headers as Record<string, string>)['Authorization'] = `Bearer ${this.token}`;
             fetchConfig.headers = headers;
-            const retryResponse = await this.fetchWithRetry(url, fetchConfig, this.maxRetries, timeout);
+
+            const retryResponse = await this.fetchWithRetry(
+              url,
+              fetchConfig,
+              this.maxRetries,
+              timeout
+            );
+
             if (retryResponse.ok) {
-              const retryData = await retryResponse.json().catch(() => null);
-              return { data: retryData, status: retryResponse.status, success: true } as ApiResponse<T>;
+              const retryData = await this.parseResponseBody(retryResponse, url);
+
+              return {
+                data: retryData,
+                status: retryResponse.status,
+                success: true,
+              } as ApiResponse<T>;
             }
           }
+
           this.handleUnauthorizedRedirect();
         }
+
         if (response.status === 403 && typeof window !== 'undefined') {
           toast(data?.message || 'ليس لديك صلاحية للوصول إلى هذا المورد', {
             icon: '🔒',
@@ -476,6 +565,7 @@ class ApiClient {
             },
           });
         }
+
         const err = new Error((data && data.message) || 'حدث خطأ ما');
         (err as any).status = response.status;
         (err as any).isForbidden = response.status === 403;
@@ -489,17 +579,19 @@ class ApiClient {
         success: true,
       };
     } catch (error: any) {
-      if (error && (error as any).status) {
-        throw error as any;
+      if (error && error.status) {
+        throw error;
       }
-      // More descriptive error message
+
       const err = new Error(
         error.name === 'AbortError'
           ? 'انتهت مهلة الاتصال - يرجى المحاولة مرة أخرى'
-          : 'خطأ في الاتصال بالخادم'
+          : error.message || 'خطأ في الاتصال بالخادم'
       );
-      (err as any).status = 500;
-      (err as any).errors = null;
+
+      (err as any).status = error.status ?? 500;
+      (err as any).errors = error.errors ?? null;
+      (err as any).responsePreview = error.responsePreview ?? null;
       throw err;
     }
   }
@@ -513,6 +605,7 @@ class ApiClient {
     if (!cached) return null;
 
     const now = Date.now();
+
     if (now - cached.timestamp > this.cacheTimeout) {
       this.cache.delete(key);
       return null;
@@ -524,44 +617,54 @@ class ApiClient {
   private setCache<T>(key: string, data: ApiResponse<T>): void {
     this.cache.set(key, { data, timestamp: Date.now() });
 
-    // Clear old cache entries (keep only last 100)
     if (this.cache.size > 100) {
       const firstKey = this.cache.keys().next().value;
+
       if (firstKey !== undefined) {
         this.cache.delete(firstKey);
       }
     }
   }
 
-  async get<T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>, options?: Omit<RequestOptions, 'method' | 'params'>) {
+  async get<T>(
+    endpoint: string,
+    params?: Record<string, string | number | boolean | undefined>,
+    options?: Omit<RequestOptions, 'method' | 'params'>
+  ): Promise<ApiResponse<T>> {
     const cacheMode = options?.cache;
+
     const shouldUseMemoryCache =
       typeof window !== 'undefined' &&
       cacheMode !== 'no-store' &&
       cacheMode !== 'no-cache' &&
       cacheMode !== 'reload';
 
-    // Check cache for GET requests (browser only)
     const cacheKey = this.getCacheKey(endpoint, params);
     const cached = shouldUseMemoryCache ? this.getFromCache<T>(cacheKey) : null;
 
-    // Return cached data if available and caching is allowed
     if (cached) {
       return cached;
     }
 
     const requestKey = `GET:${cacheKey}`;
-    const existing = this.inFlightGetRequests.get(requestKey) as Promise<ApiResponse<T>> | undefined;
+    const existing = this.inFlightGetRequests.get(requestKey) as
+      | Promise<ApiResponse<T>>
+      | undefined;
+
     if (existing) {
       return existing;
     }
 
-    const requestPromise = this.request<T>(endpoint, { method: 'GET', params, ...options })
+    const requestPromise = this.request<T>(endpoint, {
+      method: 'GET',
+      params,
+      ...options,
+    })
       .then((response) => {
-        // Cache successful GET requests only when allowed (browser only)
         if (shouldUseMemoryCache) {
           this.setCache(cacheKey, response);
         }
+
         return response;
       })
       .finally(() => {
@@ -572,78 +675,104 @@ class ApiClient {
     return requestPromise;
   }
 
-  async post<T>(endpoint: string, data?: any, options?: RequestOptions) {
+  async post<T>(
+    endpoint: string,
+    data?: any,
+    options?: RequestOptions
+  ): Promise<ApiResponse<T>> {
     const response = await this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
       ...options,
     });
-    // Clear cache after mutations
+
     this.clearCache();
     return response;
   }
 
-  async put<T>(endpoint: string, data?: any, options?: Omit<RequestOptions, 'method'>) {
+  async put<T>(
+    endpoint: string,
+    data?: any,
+    options?: Omit<RequestOptions, 'method'>
+  ): Promise<ApiResponse<T>> {
     const response = await this.request<T>(endpoint, {
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
       ...options,
     });
-    // Clear cache after mutations
+
     this.clearCache();
     return response;
   }
 
-  async patch<T>(endpoint: string, data?: any, options?: Omit<RequestOptions, 'method'>) {
+  async patch<T>(
+    endpoint: string,
+    data?: any,
+    options?: Omit<RequestOptions, 'method'>
+  ): Promise<ApiResponse<T>> {
     const response = await this.request<T>(endpoint, {
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
       ...options,
     });
-    // Clear cache after mutations
+
     this.clearCache();
     return response;
   }
 
-  async delete<T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>) {
-    const response = await this.request<T>(endpoint, { method: 'DELETE', params });
-    // Clear cache after successful delete operations
+  async delete<T>(
+    endpoint: string,
+    params?: Record<string, string | number | boolean | undefined>
+  ): Promise<ApiResponse<T>> {
+    const response = await this.request<T>(endpoint, {
+      method: 'DELETE',
+      params,
+    });
+
     this.clearCache();
     return response;
   }
 
-  // Clear all cached data
-  clearCache() {
+  clearCache(): void {
     this.cache.clear();
-    // Do not abort in-flight GETs; just prevent stale cache reuse after mutations.
   }
 
-  // Upload file with FormData
-  async upload<T>(endpoint: string, formData: FormData, params?: Record<string, string | number | boolean | undefined>) {
-    if (typeof window !== 'undefined' && !this.sessionRestored) {
+  async upload<T>(
+    endpoint: string,
+    formData: FormData,
+    params?: Record<string, string | number | boolean | undefined>
+  ): Promise<ApiResponse<T>> {
+    if (
+      typeof window !== 'undefined' &&
+      !this.sessionRestored &&
+      !this.shouldBypassSessionGate(endpoint)
+    ) {
       await this.sessionReadyPromise;
     }
+
     const url = this.buildUrl(endpoint, params);
-    const baseUrl = this.getCurrentBaseUrl();
+    const baseUrl = this.getCurrentBaseUrl().replace(/\/+$/, '');
+
     const headers: HeadersInit = {
       Accept: 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
     };
 
-    // Add Frontend API Key — prefer server-only var on SSR
-    const frontendApiKey = typeof window === 'undefined'
-      ? process.env.FRONTEND_API_KEY
-      : process.env.NEXT_PUBLIC_FRONTEND_API_KEY;
+    const frontendApiKey =
+      typeof window === 'undefined'
+        ? process.env.FRONTEND_API_KEY
+        : process.env.NEXT_PUBLIC_FRONTEND_API_KEY;
+
     if (frontendApiKey) {
       (headers as Record<string, string>)['X-Frontend-Key'] = frontendApiKey;
     }
 
-    // Add Host header for SSR internal requests
     if (typeof window === 'undefined') {
       (headers as Record<string, string>)['Host'] = getApiHostname();
     }
 
     const token = this.getToken();
+
     if (token) {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
@@ -652,34 +781,45 @@ class ApiClient {
       method: 'POST',
       headers,
       body: formData,
+      credentials: typeof window === 'undefined' ? 'omit' : 'include',
     });
 
     let data: any = null;
+
     try {
-      data = await response.json();
-    } catch {}
+      data = await this.parseResponseBody(response, url);
+    } catch (error) {
+      if (response.ok) throw error;
+      data = null;
+    }
 
     if (!response.ok) {
       if (response.status === 401) {
         this.handleUnauthorizedRedirect();
       }
+
       if (response.status === 404 && baseUrl.endsWith('/api')) {
         const altBase = baseUrl.slice(0, -4);
         const altUrl = new URL(`${altBase}${endpoint}`).toString();
+
         response = await fetch(altUrl, {
           method: 'POST',
           headers,
           body: formData,
+          credentials: typeof window === 'undefined' ? 'omit' : 'include',
         });
+
         try {
-          data = await response.json();
+          data = await this.parseResponseBody(response, altUrl);
         } catch {
           data = null;
         }
+
         if (!response.ok) {
           if (response.status === 401) {
             this.handleUnauthorizedRedirect();
           }
+
           const err = new Error((data && data.message) || 'حدث خطأ ما');
           (err as any).status = response.status;
           (err as any).isForbidden = response.status === 403;
@@ -687,9 +827,6 @@ class ApiClient {
           throw err;
         }
       } else {
-        if (response.status === 401) {
-          this.handleUnauthorizedRedirect();
-        }
         const err = new Error((data && data.message) || 'حدث خطأ ما');
         (err as any).status = response.status;
         (err as any).isForbidden = response.status === 403;
@@ -698,7 +835,6 @@ class ApiClient {
       }
     }
 
-    // Clear cache after successful upload
     this.clearCache();
 
     return {

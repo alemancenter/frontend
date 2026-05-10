@@ -12,10 +12,11 @@ const permissionAliases: Record<string, string[]> = {
   'users.delete': ['manage users', 'admin users'],
 };
 
-export function usePermissionGuard(permission: string): { isAuthorized: boolean; user: User | null } {
-  const { user } = useAuthStore();
+export function usePermissionGuard(permission: string): { isAuthorized: boolean | null; user: User | null } {
+  const { user, _hasHydrated } = useAuthStore();
 
-  const isAuthorized = useMemo(() => {
+  const isAuthorized = useMemo((): boolean | null => {
+    if (!_hasHydrated) return null;
     if (!user) return false;
 
     // 1. Super Admin / Admin Bypass
@@ -57,7 +58,7 @@ export function usePermissionGuard(permission: string): { isAuthorized: boolean;
       )
     ) ?? false;
 
-  }, [user, permission]);
+  }, [user, _hasHydrated, permission]);
 
   return { isAuthorized, user };
 }

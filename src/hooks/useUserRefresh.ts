@@ -7,9 +7,10 @@ const USER_REFRESH_TTL_MS = 5 * 60 * 1000;
 
 export function useUserRefresh() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const _hasHydrated = useAuthStore((s) => s._hasHydrated);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!_hasHydrated || !isAuthenticated) return;
     const now = Date.now();
     if (now - lastUserRefreshAt < USER_REFRESH_TTL_MS) return;
     lastUserRefreshAt = now;
@@ -17,5 +18,5 @@ export function useUserRefresh() {
     authService.me()
       .then((freshUser) => useAuthStore.getState().login(freshUser))
       .catch(() => {});
-  }, [isAuthenticated]);
+  }, [isAuthenticated, _hasHydrated]);
 }

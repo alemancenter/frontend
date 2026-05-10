@@ -89,6 +89,7 @@ export default function RegisterPage() {
         password_confirmation: formData.confirmPassword,
       });
 
+      if (!res.user) throw new Error('فشل إنشاء الحساب، يرجى المحاولة لاحقاً');
       login(res.user);
 
       // After registration, user needs to verify email
