@@ -445,5 +445,22 @@
     color: #3b82f6;
   }
 
+  /* Maintenance page animations */
+  @keyframes maintenance-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes maintenance-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+  @keyframes maintenance-progress {
+    from { width: 55%; }
+    to   { width: 82%; }
+  }
+  .maintenance-spin     { animation: maintenance-spin 4s linear infinite; }
+  .maintenance-pulse    { animation: maintenance-pulse 1.8s ease-in-out infinite; }
+  .maintenance-progress { animation: maintenance-progress 3s ease-in-out infinite alternate; }
+
 }
 

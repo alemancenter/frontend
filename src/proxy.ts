@@ -50,9 +50,43 @@ function isTokenExpired(token: string): boolean {
   return Date.now() >= payload.exp * 1000;
 }
 
+const BYPASS_COOKIE = 'maintenance_bypass';
+
 export function proxy(request: NextRequest) {
   const pathname = normalizePathname(request.nextUrl.pathname);
-  const format = request.nextUrl.searchParams.get('format')?.toLowerCase();
+  const { searchParams } = request.nextUrl;
+  const format = searchParams.get('format')?.toLowerCase();
+
+  // ── Maintenance mode ───────────────────────────────────────────────────────
+  if (process.env.MAINTENANCE_MODE === 'true') {
+    const bypassKey = process.env.MAINTENANCE_BYPASS_KEY;
+
+    // Allow the maintenance page itself and API routes through
+    if (pathname !== '/maintenance' && !request.nextUrl.pathname.startsWith('/api/')) {
+      // Activate bypass via ?key=<MAINTENANCE_BYPASS_KEY>
+      if (bypassKey && searchParams.get('key') === bypassKey) {
+        const url = request.nextUrl.clone();
+        url.searchParams.delete('key');
+        const res = NextResponse.redirect(url);
+        res.cookies.set(BYPASS_COOKIE, bypassKey, {
+          httpOnly: true,
+          sameSite: 'strict',
+          path: '/',
+          maxAge: 60 * 60 * 8, // 8 hours
+        });
+        return res;
+      }
+
+      // Allow admin with valid bypass cookie
+      const cookie = request.cookies.get(BYPASS_COOKIE)?.value;
+      if (!bypassKey || cookie !== bypassKey) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/maintenance';
+        return NextResponse.rewrite(url);
+      }
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   // Feed/RSS redirects → /rss.xml
   if (
