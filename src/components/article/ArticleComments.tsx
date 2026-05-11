@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/useStore';
 import { commentsService } from '@/lib/api/services/comments';
 import { Badge } from '@/components/ui/design-system';
+import ProfileCompletionPrompt from '@/components/common/ProfileCompletionPrompt';
 
 interface ArticleCommentsProps {
   articleId: number | string;
@@ -17,7 +18,8 @@ interface ArticleCommentsProps {
 
 export default function ArticleComments({ articleId, countryCode, authorId }: ArticleCommentsProps) {
   const pathname = usePathname();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
+  const isProfileComplete = !!(user?.country && user?.gender);
   const [isMounted, setIsMounted] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
   const [commentBody, setCommentBody] = useState('');
@@ -139,9 +141,9 @@ export default function ArticleComments({ articleId, countryCode, authorId }: Ar
             اكتب تعليقك
           </h4>
           
-          {isMounted && isAuthenticated ? (
+          {isMounted && isAuthenticated && isProfileComplete ? (
             <>
-              <textarea 
+              <textarea
                 id="comment-body"
                 name="comment-body"
                 value={commentBody}
@@ -159,7 +161,7 @@ export default function ArticleComments({ articleId, countryCode, authorId }: Ar
                 </div>
               )}
               <div className="flex items-center justify-end mt-4">
-                <button 
+                <button
                   onClick={handleCommentSubmit}
                   disabled={isSubmitting || !commentBody.trim()}
                   className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -168,13 +170,17 @@ export default function ArticleComments({ articleId, countryCode, authorId }: Ar
                 </button>
               </div>
             </>
+          ) : isMounted && isAuthenticated ? (
+            <ProfileCompletionPrompt
+              description="يرجى تحديد دولتك وجنسك لتتمكن من التعليق على المقالات"
+            />
           ) : (
             <div className="text-center py-6 bg-white/50 rounded-xl border border-gray-100">
               <div className="flex items-center justify-center gap-2 text-gray-600 mb-4">
                 <Info className="w-5 h-5" />
                 <span>يجب تسجيل الدخول لإضافة تعليق</span>
               </div>
-              <Link 
+              <Link
                 href={`/login?return=${encodeURIComponent(pathname || '')}`}
                 className="inline-flex items-center justify-center px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all"
               >

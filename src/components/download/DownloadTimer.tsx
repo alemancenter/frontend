@@ -7,6 +7,7 @@ import { API_ENDPOINTS } from '@/lib/api/config';
 import { useAuthStore } from '@/store/useStore';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import ProfileCompletionPrompt from '@/components/common/ProfileCompletionPrompt';
 
 interface Props {
   fileId: number | string;
@@ -32,8 +33,10 @@ export default function DownloadTimer({
   const [views, setViews] = useState<number>(viewsCount);
   const [downloads, setDownloads] = useState<number>(downloadCount);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const hasTrackedRef = useRef(false);
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
+  const isProfileComplete = !!(user?.country && user?.gender);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -97,7 +100,7 @@ export default function DownloadTimer({
             <span>رابط التحميل جاهز!</span>
           </div>
 
-          {isAuthenticated ? (
+          {isAuthenticated && isProfileComplete ? (
             <a
               href={downloadUrl}
               className="inline-flex items-center justify-center gap-3 bg-primary text-white text-lg font-bold px-8 py-4 rounded-xl hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 w-full sm:w-auto transform hover:-translate-y-1"
@@ -105,6 +108,14 @@ export default function DownloadTimer({
               <Download size={24} />
               تحميل الملف الآن
             </a>
+          ) : isAuthenticated ? (
+            <button
+              onClick={() => setShowProfileModal(true)}
+              className="inline-flex items-center justify-center gap-3 bg-primary text-white text-lg font-bold px-8 py-4 rounded-xl hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 w-full sm:w-auto transform hover:-translate-y-1"
+            >
+              <Download size={24} />
+              تحميل الملف الآن
+            </button>
           ) : (
             <button
               onClick={() => setShowAuthModal(true)}
@@ -166,6 +177,28 @@ export default function DownloadTimer({
             <p className="mt-6 text-xs text-gray-400">
               التسجيل مجاني تماماً ويستغرق أقل من دقيقة
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Completion Modal */}
+      {showProfileModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowProfileModal(false); }}
+        >
+          <div className="relative w-full max-w-md animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowProfileModal(false)}
+              className="absolute -top-3 -left-3 z-10 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={16} />
+            </button>
+            <ProfileCompletionPrompt
+              description="يرجى تحديد دولتك وجنسك لتتمكن من تحميل الملفات"
+              onComplete={() => setShowProfileModal(false)}
+            />
           </div>
         </div>
       )}
