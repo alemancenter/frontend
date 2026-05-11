@@ -4,11 +4,6 @@ import { useEffect, useRef } from 'react';
 import type { AdSlotConfig } from '@/lib/adsense';
 import { initializeAdSlots } from '@/lib/adsense';
 
-/**
- * Returns true only when CookieYes has granted consent for `category`.
- * Denies by default: if CookieYes failed to load, or consent state is unknown,
- * ads are blocked rather than running without authorisation.
- */
 function hasCkyConsent(category: string): boolean {
   const win = window as Window & {
     getCkyConsent?: () => { categories?: { accepted?: string[] } };
@@ -25,12 +20,32 @@ interface AdUnitProps {
 
 export default function AdUnit({ config, adClient, className = '' }: AdUnitProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    if (!hasCkyConsent('advertisement')) return;
-    return initializeAdSlots(container);
+
+    const tryInit = () => {
+      if (!hasCkyConsent('advertisement')) return;
+      if (cleanupRef.current) return; // already initialized
+      cleanupRef.current = initializeAdSlots(container) ?? null;
+    };
+
+    // Attempt immediately (returning visitors who already accepted)
+    tryInit();
+
+    // Re-attempt when CookieYes fires a consent update (first-time visitors)
+    const onConsentUpdate = () => tryInit();
+    window.addEventListener('ckyConsentUpdate', onConsentUpdate);
+
+    return () => {
+      window.removeEventListener('ckyConsentUpdate', onConsentUpdate);
+      if (cleanupRef.current) {
+        cleanupRef.current();
+        cleanupRef.current = null;
+      }
+    };
   }, [config.ad_slot, adClient]);
 
   if (!config.ad_slot || !adClient) return null;

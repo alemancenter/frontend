@@ -196,7 +196,7 @@ export const contentAuditService = {
     const existing = inFlightAIAnalyze.get(key);
     if (existing) return existing;
     const promise = apiClient
-      .post(API_ENDPOINTS.CONTENT_AUDIT.AI_ANALYZE, payload, { retries: 0, timeout: 60000 })
+      .post(API_ENDPOINTS.CONTENT_AUDIT.AI_ANALYZE, payload, { retries: 0, timeout: 100000 })
       .then((response) => unwrapData<ContentAIDecision>(response))
       .finally(() => inFlightAIAnalyze.delete(key));
     inFlightAIAnalyze.set(key, promise);
