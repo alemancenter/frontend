@@ -5,6 +5,7 @@ import Image from '@/components/common/AppImage';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { motion } from '@/lib/motion-lite';
 import { ArrowRight, Calendar, FileText, Folder, Eye, Home, ChevronLeft } from 'lucide-react';
+import { getStorageUrl } from '@/lib/utils';
 
 interface CategoryViewProps {
   category: any;
@@ -200,9 +201,9 @@ export default function CategoryView({ category, posts, countryCode, pagination 
                       >
                         {/* Image/Icon Section */}
                         <div className="relative aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
-                          {post.image_url ? (
-                            <Image 
-                              src={post.image_url} 
+                          {(post.image_url ?? post.image) ? (
+                            <Image
+                              src={getStorageUrl(post.image_url ?? post.image) || ''}
                               alt={post.title}
                               fill
                               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

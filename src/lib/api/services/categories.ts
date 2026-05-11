@@ -71,111 +71,68 @@ export const categoriesService = {
   },
 
   /**
+   * Upload image and/or icon_image for a category via the dedicated images endpoint.
+   * Files are stored in category_images/ on the server.
+   * Returns the updated category with fresh image paths.
+   */
+  async _uploadImages(id: number | string, files: { image?: File; icon_image?: File }, country: string): Promise<Category | null> {
+    const form = new FormData();
+    if (files.image instanceof File) form.append('image', files.image);
+    if (files.icon_image instanceof File) form.append('icon_image', files.icon_image);
+    if (!files.image && !files.icon_image) return null;
+
+    const res = await apiClient.upload<{ data: Category } | Category>(
+      API_ENDPOINTS.CATEGORIES.UPLOAD_IMAGES(id),
+      form,
+      { country }
+    );
+    return (res.data as any).data ?? (res.data as any);
+  },
+
+  /**
    * Create new category
    */
   async create(data: CategoryFormData): Promise<Category> {
     const { country, name, slug, parent_id, is_active, icon, icon_image, image } = data;
 
-    const payload = {
-      name,
-      slug,
-      parent_id,
-      is_active,
-      icon
-    };
+    // Step 1: create metadata (JSON)
+    const response = await apiClient.post<{ data: Category } | Category>(
+      API_ENDPOINTS.CATEGORIES.STORE,
+      { name, slug, parent_id, is_active, icon },
+      { params: { country } }
+    );
+    let category: Category = (response.data as any).data ?? (response.data as any);
 
-    try {
-      const response = await apiClient.post<{ data: Category } | Category>(
-        API_ENDPOINTS.CATEGORIES.STORE,
-        payload,
-        { params: { country } }
-      );
-
-      const category = (response.data as any).data ?? (response.data as any);
-
-      // Upload files separately if provided
-      if (icon_image instanceof File) {
-        const iconData = new FormData();
-        iconData.append('file', icon_image);
-        iconData.append('category_id', String(category.id));
-        iconData.append('file_category', 'category_icon');
-        try {
-          await apiClient.upload('/dashboard/files', iconData, { country });
-        } catch (e) {
-          console.error('Failed to upload category icon', e);
-        }
-      }
-
-      if (image instanceof File) {
-        const imgData = new FormData();
-        imgData.append('file', image);
-        imgData.append('category_id', String(category.id));
-        imgData.append('file_category', 'category_image');
-        try {
-          await apiClient.upload('/dashboard/files', imgData, { country });
-        } catch (e) {
-          console.error('Failed to upload category image', e);
-        }
-      }
-
-      return category;
-    } catch (e: any) {
-      throw e;
+    // Step 2: upload images if provided, using the returned category ID
+    if (icon_image instanceof File || image instanceof File) {
+      const updated = await this._uploadImages(category.id, { image, icon_image }, country);
+      if (updated) category = updated;
     }
+
+    return category;
   },
 
   /**
    * Update existing category
    */
   async update(id: number | string, data: Partial<CategoryFormData>): Promise<Category> {
-    const { country, name, slug, parent_id, is_active, icon, icon_image, image } = data;
+    const { country = '1', name, slug, parent_id, is_active, icon, icon_image, image } = data;
 
-    const payload = {
-      name,
-      slug,
-      parent_id,
-      is_active,
-      icon
-    };
+    // Step 1: update metadata (JSON, no files)
+    const response = await apiClient.put<{ data: Category } | Category>(
+      API_ENDPOINTS.CATEGORIES.UPDATE(id),
+      { name, slug, parent_id, is_active, icon },
+      { params: { country } }
+    );
+    let category: Category = (response.data as any).data ?? (response.data as any);
 
-    try {
-      const response = await apiClient.post<{ data: Category } | Category>(
-        API_ENDPOINTS.CATEGORIES.UPDATE(id),
-        payload,
-        { params: { country } }
-      );
-
-      const category = (response.data as any).data ?? (response.data as any);
-
-      // Upload files separately if provided
-      if (icon_image instanceof File) {
-        const iconData = new FormData();
-        iconData.append('file', icon_image);
-        iconData.append('category_id', String(id));
-        iconData.append('file_category', 'category_icon');
-        try {
-          await apiClient.upload('/dashboard/files', iconData, { country });
-        } catch (e) {
-          console.error('Failed to upload category icon', e);
-        }
-      }
-
-      if (image instanceof File) {
-        const imgData = new FormData();
-        imgData.append('file', image);
-        imgData.append('category_id', String(id));
-        imgData.append('file_category', 'category_image');
-        try {
-          await apiClient.upload('/dashboard/files', imgData, { country });
-        } catch (e) {
-          console.error('Failed to upload category image', e);
-        }
-      }
-
-      return category;
-    } catch (e: any) {
-      throw e;
+    // Step 2: upload images if new files were provided
+    if (icon_image instanceof File || image instanceof File) {
+      const updated = await this._uploadImages(id, { image, icon_image }, country);
+      if (updated) category = updated;
     }
+
+    return category;
   },
   
   /**

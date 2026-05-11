@@ -754,8 +754,8 @@ export default function PostView({ post, countryCode, adSettings }: PostViewProp
                 </h3>
                 <div className="flex items-center gap-4 mb-4">
                   <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0 relative overflow-hidden">
-                    {post.category.icon_image_url ? (
-                       <Image src={post.category.icon_image_url} alt="" fill unoptimized sizes="48px" className="object-contain p-2" />
+                    {(post.category.icon_image_url ?? post.category.icon_image) ? (
+                       <Image src={getStorageUrl(post.category.icon_image_url ?? post.category.icon_image) || ''} alt="" fill sizes="48px" className="object-contain p-2" />
                     ) : (
                        <Layers size={24} />
                     )}

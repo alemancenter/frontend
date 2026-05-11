@@ -30,7 +30,7 @@ function formatDate(value?: string) {
   });
 }
 
-function PostCard({ post, countryCode, featured = false }: { post: Post; countryCode: string; featured?: boolean }) {
+function PostCard({ post, countryCode, featured = false, priority = false }: { post: Post; countryCode: string; featured?: boolean; priority?: boolean }) {
   const image = getStorageUrl(post.image_url || post.image);
   const excerpt = stripHtml(post.meta_description || post.content);
 
@@ -47,6 +47,8 @@ function PostCard({ post, countryCode, featured = false }: { post: Post; country
             fill
             sizes={featured ? '(max-width: 1024px) 100vw, 33vw' : '(max-width: 1024px) 100vw, 25vw'}
             className="object-cover transition duration-500 group-hover:scale-105"
+            priority={priority}
+            loading={priority ? 'eager' : 'lazy'}
           />
         </div>
       )}
@@ -130,8 +132,8 @@ export default function HomeEditorialSection({
               </Link>
             </div>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              {featured.map((post) => (
-                <PostCard key={post.id} post={post} countryCode={country.code} featured />
+              {featured.map((post, i) => (
+                <PostCard key={post.id} post={post} countryCode={country.code} featured priority={i === 0} />
               ))}
             </div>
           </div>

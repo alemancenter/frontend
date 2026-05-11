@@ -240,6 +240,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: number | string) => `/dashboard/categories/${id}`,
     DELETE: (id: number | string) => `/dashboard/categories/${id}`,
     TOGGLE: (id: number | string) => `/dashboard/categories/${id}/toggle`,
+    UPLOAD_IMAGES: (id: number | string) => `/dashboard/categories/${id}/images`,
   },
   
   // ========== FILES ==========

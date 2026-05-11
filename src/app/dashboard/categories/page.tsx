@@ -96,6 +96,8 @@ export default function CategoriesPage() {
     icon_image: null,
     image: null,
   });
+  const [iconImagePreview, setIconImagePreview] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
     current_page: 1,
     last_page: 1,
@@ -129,7 +131,7 @@ export default function CategoriesPage() {
       title: 'الاسم',
       sortable: true,
       render: (value: string, item: Category) => {
-        const imageUrl = getStorageUrl(item.icon_image_url);
+        const imageUrl = getStorageUrl(item.icon_image_url ?? item.icon_image);
         const depth = item.depth || 0;
         
         return (
@@ -244,7 +246,15 @@ export default function CategoriesPage() {
     }
   };
 
+  const resetPreviews = () => {
+    if (iconImagePreview) URL.revokeObjectURL(iconImagePreview);
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setIconImagePreview(null);
+    setImagePreview(null);
+  };
+
   const openEditModal = (category: Category) => {
+    resetPreviews();
     setFormData({
       name: category.name,
       parent_id: category.parent_id ?? '',
@@ -257,6 +267,7 @@ export default function CategoriesPage() {
   };
 
   const openCreateModal = () => {
+    resetPreviews();
     setFormData({
       name: '',
       parent_id: '',
@@ -293,6 +304,7 @@ export default function CategoriesPage() {
         });
       }
       await Promise.all([fetchCategories(1), fetchAll()]);
+      resetPreviews();
       setModal({ open: false, mode: 'create', category: null });
     } finally {
       setLoading(false);
@@ -617,19 +629,27 @@ export default function CategoriesPage() {
                 name="icon_image"
                 type="file"
                 accept="image/*"
-                onChange={(e) => setFormData({ ...formData, icon_image: e.target.files?.[0] || null })}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  setFormData({ ...formData, icon_image: file });
+                  if (iconImagePreview) URL.revokeObjectURL(iconImagePreview);
+                  setIconImagePreview(file ? URL.createObjectURL(file) : null);
+                }}
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm"
               />
               <p className="text-xs text-muted-foreground mt-1">تُعرض كأفاتار صغير في القوائم</p>
-              {modal.mode === 'edit' && modal.category?.icon_image_url && (
-                <div className="mt-2">
+              {(iconImagePreview || (modal.mode === 'edit' && (modal.category?.icon_image_url ?? modal.category?.icon_image))) && (
+                <div className="mt-2 flex items-center gap-2">
                   <Image
-                    src={getStorageUrl(modal.category.icon_image_url) || ''}
+                    src={iconImagePreview || getStorageUrl(modal.category?.icon_image_url ?? modal.category?.icon_image) || ''}
                     alt="Category icon preview"
                     width={40}
                     height={40}
                     className="h-10 w-10 object-contain rounded border"
                   />
+                  {iconImagePreview && (
+                    <span className="text-xs text-success">✓ تم اختيار الصورة</span>
+                  )}
                 </div>
               )}
             </div>
@@ -640,19 +660,27 @@ export default function CategoriesPage() {
                 name="image"
                 type="file"
                 accept="image/*"
-                onChange={(e) => setFormData({ ...formData, image: e.target.files?.[0] || null })}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  setFormData({ ...formData, image: file });
+                  if (imagePreview) URL.revokeObjectURL(imagePreview);
+                  setImagePreview(file ? URL.createObjectURL(file) : null);
+                }}
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm"
               />
               <p className="text-xs text-muted-foreground mt-1">تُستخدم في الهيدر/الهيرو لهذه الفئة</p>
-              {modal.mode === 'edit' && (modal.category?.image_url || modal.category?.image) && (
+              {(imagePreview || (modal.mode === 'edit' && (modal.category?.image_url || modal.category?.image))) && (
                 <div className="mt-2">
                   <Image
-                    src={getStorageUrl(modal.category.image_url || modal.category.image) || ''}
+                    src={imagePreview || getStorageUrl(modal.category?.image_url || modal.category?.image) || ''}
                     alt="Current Image"
                     width={120}
                     height={80}
                     className="h-20 w-auto object-contain rounded border"
                   />
+                  {imagePreview && (
+                    <span className="text-xs text-success mt-1 block">✓ تم اختيار الصورة</span>
+                  )}
                 </div>
               )}
             </div>

@@ -77,6 +77,7 @@ const statusLabels: Record<string, string> = {
 export default function UsersPage() {
   const router = useRouter();
   const { isAuthorized } = usePermissionGuard('users.view');
+  const { isAuthorized: canAdminAllUsers, user: currentUser } = usePermissionGuard('admin users');
   const { isAuthorized: canManageRoles } = usePermissionGuard('manage roles');
   // Data State
   const [users, setUsers] = useState<User[]>([]);
@@ -169,6 +170,21 @@ export default function UsersPage() {
   const fetchUsers = useCallback(async (page = 1, search = searchQuery, role = roleFilter, status = statusFilter) => {
     try {
       setLoading(true);
+
+      // Self-only mode: has 'manage users' but NOT 'admin users'
+      if (canAdminAllUsers === false && currentUser) {
+        try {
+          const userData = await usersService.getById(currentUser.id);
+          setUsers(userData ? [userData as User] : [currentUser as User]);
+        } catch {
+          setUsers([currentUser as User]);
+        }
+        setCurrentPage(1);
+        setLastPage(1);
+        setTotalCount(1);
+        return;
+      }
+
       const params: any = { page };
       if (search.trim()) params.search = search.trim();
       if (role) params.role = role;
@@ -189,7 +205,7 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, roleFilter, statusFilter]);
+  }, [searchQuery, roleFilter, statusFilter, canAdminAllUsers, currentUser]);
 
   // Initial load
   useEffect(() => {
@@ -459,7 +475,7 @@ export default function UsersPage() {
           <p className="text-muted-foreground">نظام إدارة المستخدمين والصلاحيات الشامل</p>
         </div>
         <div className="flex gap-2">
-          {selectedIds.length > 0 && (
+          {canAdminAllUsers && selectedIds.length > 0 && (
             <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-5 duration-300">
               <span className="text-sm text-muted-foreground whitespace-nowrap">
                 تم تحديد {selectedIds.length}
@@ -524,9 +540,11 @@ export default function UsersPage() {
             </button>
           </div>
 
-          <Button onClick={() => setCreateModal(true)} leftIcon={<UserPlus className="w-4 h-4" />}>
-            إضافة مستخدم
-          </Button>
+          {canAdminAllUsers && (
+            <Button onClick={() => setCreateModal(true)} leftIcon={<UserPlus className="w-4 h-4" />}>
+              إضافة مستخدم
+            </Button>
+          )}
         </div>
       </div>
 
@@ -567,51 +585,61 @@ export default function UsersPage() {
         </Card>
       </div>
 
+      {/* Restricted access notice */}
+      {canAdminAllUsers === false && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+          <Shield className="w-4 h-4 shrink-0" />
+          <span>صلاحيتك محدودة — يمكنك فقط مشاهدة ملفك الشخصي وتعديله.</span>
+        </div>
+      )}
+
       {/* Filters & Search */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <CardTitle>قائمة الأعضاء</CardTitle>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  name="search"
-                  id="search-users"
-                  placeholder="بحث بالاسم أو البريد..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-muted border-none rounded-lg pr-9 pl-4 py-2 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
+            {canAdminAllUsers && (
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    name="search"
+                    id="search-users"
+                    placeholder="بحث بالاسم أو البريد..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-muted border-none rounded-lg pr-9 pl-4 py-2 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+                <select
+                  name="role_filter"
+                  id="role-filter"
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="bg-muted border-none rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                >
+                  <option value="">كل الأدوار</option>
+                  {availableRoles.map(role => (
+                    <option key={role.id} value={role.name}>{role.name}</option>
+                  ))}
+                </select>
+                <select
+                  name="status_filter"
+                  id="status-filter"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="bg-muted border-none rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                >
+                  <option value="">كل الحالات</option>
+                  <option value="active">نشط</option>
+                  <option value="pending">قيد الانتظار</option>
+                  <option value="inactive">غير نشط</option>
+                  <option value="banned">محظور</option>
+                  <option value="ip_blocked">IP محظور</option>
+                </select>
               </div>
-              <select
-                name="role_filter"
-                id="role-filter"
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="bg-muted border-none rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-              >
-                <option value="">كل الأدوار</option>
-                {availableRoles.map(role => (
-                  <option key={role.id} value={role.name}>{role.name}</option>
-                ))}
-              </select>
-              <select
-                name="status_filter"
-                id="status-filter"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-muted border-none rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-              >
-                <option value="">كل الحالات</option>
-                <option value="active">نشط</option>
-                <option value="pending">قيد الانتظار</option>
-                <option value="inactive">غير نشط</option>
-                <option value="banned">محظور</option>
-                <option value="ip_blocked">IP محظور</option>
-              </select>
-            </div>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -620,16 +648,18 @@ export default function UsersPage() {
               <table className="w-full">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="py-3 px-4 w-[40px]">
-                      <input
-                        type="checkbox"
-                        name="select_all"
-                        id="select-all-users"
-                        className="rounded border-gray-300"
-                        checked={users.length > 0 && selectedIds.length === users.length}
-                        onChange={(e) => handleSelectAll(e.target.checked)}
-                      />
-                    </th>
+                    {canAdminAllUsers && (
+                      <th className="py-3 px-4 w-[40px]">
+                        <input
+                          type="checkbox"
+                          name="select_all"
+                          id="select-all-users"
+                          className="rounded border-gray-300"
+                          checked={users.length > 0 && selectedIds.length === users.length}
+                          onChange={(e) => handleSelectAll(e.target.checked)}
+                        />
+                      </th>
+                    )}
                     <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">المستخدم</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">الدور</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">الحالة</th>
@@ -641,7 +671,7 @@ export default function UsersPage() {
                 <tbody className="divide-y divide-border">
                   {loading && users.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                      <td colSpan={canAdminAllUsers ? 7 : 6} className="py-8 text-center text-muted-foreground">
                         <div className="flex items-center justify-center gap-2">
                           <Loader2 className="w-5 h-5 animate-spin" />
                           جاري التحميل...
@@ -650,7 +680,7 @@ export default function UsersPage() {
                     </tr>
                   ) : users.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                      <td colSpan={canAdminAllUsers ? 7 : 6} className="py-8 text-center text-muted-foreground">
                         لا يوجد مستخدمين
                       </td>
                     </tr>
@@ -663,16 +693,18 @@ export default function UsersPage() {
                         transition={{ delay: index * 0.03 }}
                         className="group hover:bg-muted/30 transition-colors"
                       >
-                        <td className="py-4 px-4">
-                          <input
-                            type="checkbox"
-                            name={`select_user_${user.id}`}
-                            id={`select-user-${user.id}`}
-                            className="rounded border-gray-300"
-                            checked={selectedIds.includes(user.id)}
-                            onChange={(e) => handleSelectOne(user.id, e.target.checked)}
-                          />
-                        </td>
+                        {canAdminAllUsers && (
+                          <td className="py-4 px-4">
+                            <input
+                              type="checkbox"
+                              name={`select_user_${user.id}`}
+                              id={`select-user-${user.id}`}
+                              className="rounded border-gray-300"
+                              checked={selectedIds.includes(user.id)}
+                              onChange={(e) => handleSelectOne(user.id, e.target.checked)}
+                            />
+                          </td>
+                        )}
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
                               <div className="relative">
@@ -745,9 +777,11 @@ export default function UsersPage() {
                             }}>
                               <Mail className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" className="text-error hover:bg-error/10" onClick={() => setDeleteModal({ open: true, user })}>
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            {canAdminAllUsers && (
+                              <Button variant="ghost" size="sm" className="text-error hover:bg-error/10" onClick={() => setDeleteModal({ open: true, user })}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </motion.tr>
@@ -778,16 +812,18 @@ export default function UsersPage() {
                     transition={{ delay: index * 0.05 }}
                     className="group relative bg-card border border-border rounded-xl p-4 hover:shadow-lg transition-all duration-300"
                   >
-                    <div className="absolute top-4 left-4">
-                      <input
-                        type="checkbox"
-                        name={`select_user_grid_${user.id}`}
-                        id={`select-user-grid-${user.id}`}
-                        className="rounded border-gray-300 w-4 h-4"
-                        checked={selectedIds.includes(user.id)}
-                        onChange={(e) => handleSelectOne(user.id, e.target.checked)}
-                      />
-                    </div>
+                    {canAdminAllUsers && (
+                      <div className="absolute top-4 left-4">
+                        <input
+                          type="checkbox"
+                          name={`select_user_grid_${user.id}`}
+                          id={`select-user-grid-${user.id}`}
+                          className="rounded border-gray-300 w-4 h-4"
+                          checked={selectedIds.includes(user.id)}
+                          onChange={(e) => handleSelectOne(user.id, e.target.checked)}
+                        />
+                      </div>
+                    )}
                     
                     <div className="flex flex-col items-center text-center">
                       <div className="relative mb-3">
@@ -864,7 +900,7 @@ export default function UsersPage() {
                         </div>
                       )}
 
-                      <div className="grid grid-cols-4 w-full gap-2 border-t border-border pt-3 mt-auto">
+                      <div className={cn("grid w-full gap-2 border-t border-border pt-3 mt-auto", canAdminAllUsers ? "grid-cols-4" : "grid-cols-3")}>
                         <Button variant="ghost" size="sm" className="h-8 w-full px-0" onClick={() => setViewModal({ open: true, user })}>
                            <Eye className="w-4 h-4" />
                         </Button>
@@ -877,9 +913,11 @@ export default function UsersPage() {
                         }}>
                            <Mail className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-8 w-full px-0 text-error hover:bg-error/10 hover:text-error" onClick={() => setDeleteModal({ open: true, user })}>
-                           <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {canAdminAllUsers && (
+                          <Button variant="ghost" size="sm" className="h-8 w-full px-0 text-error hover:bg-error/10 hover:text-error" onClick={() => setDeleteModal({ open: true, user })}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -888,13 +926,15 @@ export default function UsersPage() {
             </div>
           )}
           
-          <div className="mt-8 border-t border-border pt-4">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={lastPage}
-              onPageChange={handlePageChange}
-            />
-          </div>
+          {canAdminAllUsers && (
+            <div className="mt-8 border-t border-border pt-4">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={lastPage}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -109,11 +109,12 @@ function CategoryVisual({ category, gradient }: { category: Category; gradient: 
     );
   }
 
-  if (category.icon_image_url) {
+  const iconImageSrc = category.icon_image_url ?? category.icon_image;
+  if (iconImageSrc) {
     return (
       <div className="relative w-full h-full">
         <Image
-          src={getStorageUrl(category.icon_image_url) || ''}
+          src={getStorageUrl(iconImageSrc) || ''}
           alt=""
           fill
           sizes="64px"
@@ -207,13 +208,15 @@ export default function HomeCategoriesSection({ country, categories }: HomeCateg
                   <Link href={`/${country.code}/posts/category/${category.id}`} className="absolute inset-0 z-0" aria-label={category.name} />
 
                   <div className="h-32 w-full relative overflow-hidden bg-slate-50 pointer-events-none">
-                    {category.image_url ? (
+                    {(category.image_url ?? category.image) ? (
                       <Image
-                        src={getStorageUrl(category.image_url) || ''}
+                        src={getStorageUrl(category.image_url ?? category.image) || ''}
                         alt={category.name}
                         fill
                         sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                         className="object-cover transform group-hover:scale-110 transition-transform duration-700"
+                        priority={index === 0}
+                        loading={index === 0 ? 'eager' : 'lazy'}
                       />
                     ) : (
                       <div className={`w-full h-full bg-gradient-to-br ${gradient} opacity-10 group-hover:opacity-20 transition-opacity`} />

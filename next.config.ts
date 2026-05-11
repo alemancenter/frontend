@@ -194,16 +194,6 @@ const nextConfig: NextConfig = {
           },
         ]
       },
-      // Next.js hashed static assets — safe to cache forever
-      {
-        source: '/_next/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable'
-          }
-        ]
-      },
       // Cache headers for images
       {
         source: '/assets/:path*',

@@ -104,14 +104,13 @@ export default function CategoriesSection({ categories, countryCode }: Categorie
                     <div className="relative z-10 flex flex-col h-full">
                       <div className="flex items-start justify-between mb-6">
                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${iconColorClass} group-hover:scale-110 transition-transform duration-300 shadow-sm overflow-hidden relative`}>
-                          {/* Use category.icon_url if available, otherwise default icon */}
-                          {category.icon_url || category.icon ? (
-                             <Image 
-                               src={getStorageUrl(category.icon_url || category.icon) || ''} 
+                          {(category.icon_image_url ?? category.icon_image ?? category.icon_url) ? (
+                             <Image
+                               src={getStorageUrl(category.icon_image_url ?? category.icon_image ?? category.icon_url) || ''}
                                alt={category.name}
                                fill
                                sizes="56px"
-                               className="object-cover"
+                               className="object-contain"
                              />
                           ) : (
                             <Folder className="w-7 h-7" />
